@@ -1,0 +1,374 @@
+:root {
+  --bg: #070b14;
+  --bg-elev: #0e1626;
+  --bg-panel: rgba(14, 22, 38, 0.88);
+  --line: rgba(148, 197, 255, 0.14);
+  --text: #e8eef8;
+  --muted: #8ea0bb;
+  --accent: #5eead4;
+  --accent-2: #93c5fd;
+  --danger: #fb7185;
+  --user: #134e4a;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  --radius: 18px;
+  font-family: Outfit, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(94, 234, 212, 0.16), transparent 55%),
+    radial-gradient(900px 500px at -10% 110%, rgba(147, 197, 253, 0.12), transparent 50%),
+    var(--bg);
+}
+
+button,
+textarea,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 340px;
+  height: 100vh;
+  gap: 12px;
+  padding: 12px;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+  min-height: 0;
+}
+
+.sidebar,
+.sources {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 16px;
+  overflow: auto;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand strong {
+  letter-spacing: 0.18em;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.brand span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.health {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.pill.ok {
+  color: var(--accent);
+  border-color: rgba(94, 234, 212, 0.35);
+}
+
+.pill.warn {
+  color: var(--danger);
+  border-color: rgba(251, 113, 133, 0.4);
+}
+
+.section-label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 9px 10px;
+}
+
+.row:hover,
+.row.active {
+  background: rgba(94, 234, 212, 0.08);
+  border-color: var(--line);
+}
+
+.row small {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.new-chat,
+.upload {
+  display: block;
+  border: 1px dashed rgba(147, 197, 253, 0.55);
+  background: rgba(147, 197, 253, 0.08);
+  color: var(--accent-2);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.upload:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.upload input[type="file"] {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.header-upload {
+  margin-top: 12px;
+  max-width: 420px;
+}
+
+.chat {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+
+.chat-header {
+  padding: 18px 22px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-header h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.chat-header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.pipeline {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.step {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.step b {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.step.active {
+  border-color: rgba(94, 234, 212, 0.55);
+  color: var(--accent);
+}
+
+.messages {
+  overflow: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bubble {
+  max-width: 760px;
+  border-radius: 16px;
+  padding: 12px 14px;
+  line-height: 1.55;
+}
+
+.bubble.user {
+  margin-left: auto;
+  background: var(--user);
+  border: 1px solid rgba(94, 234, 212, 0.25);
+}
+
+.bubble.assistant {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+}
+
+.bubble.assistant p {
+  margin: 0 0 0.7em;
+}
+
+.bubble.assistant p:last-child {
+  margin-bottom: 0;
+}
+
+.composer {
+  padding: 12px 16px 16px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+textarea {
+  resize: none;
+  min-height: 56px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #0a1220;
+  color: var(--text);
+  padding: 12px 14px;
+}
+
+.send {
+  background: var(--accent);
+  color: #042f2e;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 18px;
+  font-weight: 700;
+}
+
+.send:disabled {
+  opacity: 0.45;
+}
+
+.prompts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.prompt {
+  text-align: left;
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.prompt span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.source-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  background: #0a1220;
+}
+
+.source-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.source-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  max-height: 8.4em;
+  overflow: auto;
+}
+
+.score {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.empty {
+  margin: auto;
+  max-width: 640px;
+  text-align: left;
+}
+
+@media (max-width: 1100px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .sources,
+  .sidebar {
+    max-height: 320px;
+  }
+}
