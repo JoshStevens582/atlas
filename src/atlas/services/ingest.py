@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Sequence
 from pathlib import Path
 from uuid import uuid4
 
@@ -110,6 +111,18 @@ class IngestService:
         if not demo_path.exists():
             raise IngestError("sample_docs/00-demo-note.md is missing.")
         return await self.ingest_path(demo_path)
+
+    async def reset_and_ingest_paths(self, paths: Sequence[Path]) -> list[DocumentOut]:
+        """Wipe the index and ingest the given files. Used by the eval runner."""
+        if not paths:
+            raise IngestError("No documents were provided to index.")
+        async with self._session_factory() as session:
+            await DocumentRepository(session).delete_all_documents()
+        await asyncio.to_thread(self._chunk_store.reset)
+        indexed: list[DocumentOut] = []
+        for path in paths:
+            indexed.append(await self.ingest_path(path))
+        return indexed
 
     async def delete_document(self, document_id: str) -> bool:
         async with self._session_factory() as session:

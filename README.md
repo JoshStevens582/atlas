@@ -64,3 +64,9 @@ uv run ruff check .
 uv run mypy .
 uv run pytest --cov=atlas --cov-branch
 ```
+
+Golden-set RAG eval (needs `OPENAI_API_KEY`; writes to `data/eval/` so it does not touch the demo index):
+
+```powershell
+uv run python -m atlas.eval_cli
+```

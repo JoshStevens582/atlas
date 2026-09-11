@@ -87,6 +87,35 @@ class RagChatService:
         )
         return keep_close_chunks(raw_hits, self._settings.max_distance)
 
+    async def answer_once(self, question: str) -> tuple[list[RetrievedChunk], str]:
+        """Retrieve and generate one turn without saving chat history.
+
+        Used by the golden-set eval so scoring does not pollute SQLite threads.
+        """
+        cleaned = question.strip()
+        if not cleaned:
+            raise ValueError("Message cannot be empty.")
+
+        sources = await self.retrieve(cleaned)
+        response = await self._openai.responses.create(
+            model=self._settings.openai_chat_model,
+            instructions=DEVELOPER_INSTRUCTIONS,
+            temperature=0,
+            input=cast(
+                ResponseInputParam,
+                [
+                    {
+                        "role": "user",
+                        "content": build_user_payload(cleaned, sources),
+                    }
+                ],
+            ),
+        )
+        answer = response.output_text.strip()
+        if not answer:
+            answer = "I could not generate an answer from the retrieved documents."
+        return sources, answer
+
     async def stream_answer(
         self,
         question: str,
