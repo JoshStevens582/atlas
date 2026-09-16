@@ -179,11 +179,6 @@ button {
   cursor: pointer;
 }
 
-.header-upload {
-  margin-top: 12px;
-  max-width: 420px;
-}
-
 .chat {
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -340,6 +335,10 @@ textarea {
   line-height: 1.45;
   max-height: 8.4em;
   overflow: auto;
+}
+
+.tool-card {
+  border-color: rgba(94, 234, 212, 0.35);
 }
 
 .score {

@@ -18,6 +18,11 @@ from atlas.services.prompting import (
     build_user_payload,
     keep_close_chunks,
 )
+from atlas.services.tools import (
+    ATLAS_TOOLS,
+    parse_tool_arguments,
+    run_allowlisted_tool,
+)
 
 
 # Retrieve-then-generate chat service for Atlas.
@@ -148,18 +153,12 @@ class RagChatService:
                 "content": build_user_payload(cleaned, sources),
             }
         )
-        answer_parts: list[str] = []
-        async with self._openai.responses.stream(
-            model=self._settings.openai_chat_model,
-            instructions=DEVELOPER_INSTRUCTIONS,
-            input=cast(ResponseInputParam, prompt_messages),
-        ) as stream:
-            async for event in stream:
-                if event.type == "response.output_text.delta":
-                    answer_parts.append(event.delta)
-                    yield {"type": "token", "text": event.delta}
-
-        answer = "".join(answer_parts).strip()
+        answer = ""
+        async for event in self._stream_with_tools(prompt_messages):
+            if event.get("type") == "token":
+                answer += str(event.get("text", ""))
+            yield event
+        answer = answer.strip()
         if not answer:
             answer = "I could not generate an answer from the retrieved documents."
             yield {"type": "token", "text": answer}
@@ -181,6 +180,83 @@ class RagChatService:
         title = question if len(question) <= 72 else f"{question[:69]}..."
         return await self.create_thread(title)
 
+    async def _stream_with_tools(
+        self,
+        prompt_messages: list[EasyInputMessageParam],
+    ) -> AsyncIterator[dict[str, Any]]:
+        previous_response_id: str | None = None
+        tool_outputs: list[dict[str, str]] = []
+        max_rounds = self._settings.max_tool_rounds
+        if max_rounds < 1:
+            max_rounds = 1
+
+        for _round in range(max_rounds + 1):
+            text_parts, response = await self._complete_model_round(
+                prompt_messages,
+                previous_response_id,
+                tool_outputs,
+            )
+            previous_response_id = str(getattr(response, "id", "") or "")
+            function_calls = _function_calls(response)
+            if not function_calls:
+                for part in text_parts:
+                    yield {"type": "token", "text": part}
+                return
+
+            tool_outputs = []
+            for call in function_calls:
+                name = str(getattr(call, "name", "") or "")
+                arguments = str(getattr(call, "arguments", "") or "{}")
+                call_id = str(getattr(call, "call_id", "") or "")
+                result = run_allowlisted_tool(name, arguments)
+                yield {
+                    "type": "tool",
+                    "name": name,
+                    "arguments": parse_tool_arguments(arguments),
+                    "result": result,
+                }
+                tool_outputs.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": result,
+                    }
+                )
+            if not previous_response_id:
+                break
+
+        fallback = "The tool loop stopped before a final answer was written."
+        yield {"type": "token", "text": fallback}
+
+    async def _complete_model_round(
+        self,
+        prompt_messages: list[EasyInputMessageParam],
+        previous_response_id: str | None,
+        tool_outputs: list[dict[str, str]],
+    ) -> tuple[list[str], Any]:
+        text_parts: list[str] = []
+        if previous_response_id:
+            stream_cm = self._openai.responses.stream(
+                model=self._settings.openai_chat_model,
+                instructions=DEVELOPER_INSTRUCTIONS,
+                tools=cast(Any, ATLAS_TOOLS),
+                previous_response_id=previous_response_id,
+                input=cast(ResponseInputParam, tool_outputs),
+            )
+        else:
+            stream_cm = self._openai.responses.stream(
+                model=self._settings.openai_chat_model,
+                instructions=DEVELOPER_INSTRUCTIONS,
+                tools=cast(Any, ATLAS_TOOLS),
+                input=cast(ResponseInputParam, prompt_messages),
+            )
+        async with stream_cm as stream:
+            async for event in stream:
+                if event.type == "response.output_text.delta":
+                    text_parts.append(event.delta)
+            response = await stream.get_final_response()
+        return text_parts, response
+
 
 def _history_as_input(history: list[ChatMessage]) -> list[EasyInputMessageParam]:
     messages: list[EasyInputMessageParam] = []
@@ -194,3 +270,8 @@ def _history_as_input(history: list[ChatMessage]) -> list[EasyInputMessageParam]
 
 async def _in_thread(func: Any, *args: Any) -> Any:
     return await asyncio.to_thread(func, *args)
+
+
+def _function_calls(response: Any) -> list[Any]:
+    output = getattr(response, "output", None) or []
+    return [item for item in output if getattr(item, "type", None) == "function_call"]

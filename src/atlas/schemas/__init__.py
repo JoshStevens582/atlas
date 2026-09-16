@@ -6,6 +6,7 @@ from atlas.schemas.chat import (
     RetrievedChunk,
     ThreadDetailOut,
     ThreadOut,
+    ToolCallOut,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "RetrievedChunk",
     "ThreadDetailOut",
     "ThreadOut",
+    "ToolCallOut",
 ]

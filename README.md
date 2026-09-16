@@ -2,16 +2,17 @@
 
 A recruiter-ready RAG chatbot: **retrieve first, then generate**, with the retrieval step visible in the UI.
 
-Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds documents with OpenAI, searches ChromaDB, quarantines retrieved text in XML tags, and streams the answer. A right-hand inspector shows the chunks and cosine distances used for the latest reply.
+Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds documents with OpenAI, searches ChromaDB, quarantines retrieved text in XML tags, and streams the answer. A right-hand **Sources used** panel shows the chunks and cosine distances used for the latest reply.
 
 **Repo:** [github.com/JoshStevens582/atlas](https://github.com/JoshStevens582/atlas)
 
 ## Demo script (2 minutes)
 
 1. Open the app and click **How does Atlas retrieve answers?**
-2. Point at the inspector: those passages were searched *before* the model wrote a word.
+2. Point at **Sources used**: those passages were searched *before* the model wrote a word.
 3. Ask **What is the refund policy?** The vendor memo tries to jailbreak the model. Atlas should stay on the 14-day store-credit rule.
-4. Upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer.
+4. Ask **Where is support ticket T-104?** That status is not in the handbook. The model should call `get_support_ticket`; Atlas runs it; **Sources used** shows the tool result.
+5. Upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer.
 
 ## Stack
 
@@ -21,7 +22,7 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 | Chat DB | SQLite via SQLAlchemy | Threads, messages, document *metadata* only |
 | **Vector DB** | **ChromaDB** (cosine, persistent under `data/chroma`) | Chunk embeddings + nearest-neighbor search |
 | Model | OpenAI `gpt-4o-mini` + `text-embedding-3-small` | Streaming Responses API |
-| UI | React + TypeScript | SSE tokens, citations, retrieval inspector |
+| UI | React + TypeScript | SSE tokens, citations, Sources used panel |
 
 SQLite is **not** the vector database. ChromaDB is. Atlas embeds with OpenAI and passes those vectors into Chroma explicitly (no local ONNX embedder).
 

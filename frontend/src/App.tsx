@@ -15,6 +15,7 @@ import type {
   IndexedDocument,
   RetrievedChunk,
   ThreadSummary,
+  ToolCall,
 } from "./types";
 
 function displayTitle(title: string): string {
@@ -34,8 +35,8 @@ const SUGGESTIONS = [
     detail: "Demo Note — Tuesday and Thursday, 10:00 to 13:00.",
   },
   {
-    title: "What is the demo refund window?",
-    detail: "Demo Note — 7 days, store credit, sample hardware.",
+    title: "List all support tickets",
+    detail: "Not in the handbook — should call get_support_ticket with no id.",
   },
 ];
 
@@ -46,9 +47,10 @@ export default function App() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sources, setSources] = useState<RetrievedChunk[]>([]);
+  const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [stage, setStage] = useState<"idle" | "search" | "generate">("idle");
+  const [stage, setStage] = useState<"idle" | "search" | "tool" | "generate">("idle");
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -81,6 +83,7 @@ export default function App() {
     setThreadId(detail.id);
     setMessages(detail.messages);
     setSources([]);
+    setToolCalls([]);
     setStage("idle");
   }
 
@@ -94,6 +97,7 @@ export default function App() {
     setStreaming(true);
     setStage("search");
     setSources([]);
+    setToolCalls([]);
     setMessages((current) => [
       ...current,
       {
@@ -123,7 +127,19 @@ export default function App() {
           setSources(event.sources);
           setStage("generate");
         }
+        if (event.type === "tool") {
+          setToolCalls((current) => [
+            ...current,
+            {
+              name: event.name,
+              arguments: event.arguments,
+              result: event.result,
+            },
+          ]);
+          setStage("tool");
+        }
         if (event.type === "token") {
+          setStage("generate");
           setMessages((current) => {
             const copy = [...current];
             const last = copy[copy.length - 1];
@@ -179,7 +195,7 @@ export default function App() {
           <span className="pill">{health?.document_count ?? 0} docs</span>
           <span className="pill">{health?.chunk_count ?? 0} chunks</span>
         </div>
-        <button className="new-chat" onClick={() => { setThreadId(null); setMessages([]); setSources([]); }}>
+        <button className="new-chat" onClick={() => { setThreadId(null); setMessages([]); setSources([]); setToolCalls([]); }}>
           New chat
         </button>
         <label className="upload" htmlFor="atlas-upload">
@@ -208,8 +224,8 @@ export default function App() {
             ))}
           </div>
         </div>
-        <div className="corpus-block">
-          <div className="section-label">Corpus</div>
+        <div className="library-block">
+          <div className="section-label">Library</div>
           <div className="stack">
             {documents.map((document) => (
               <div className="row" key={document.id}>
@@ -237,38 +253,28 @@ export default function App() {
       <main className="panel chat">
         <header className="chat-header">
           <h1>{selectedTitle}</h1>
-          <p>Search the handbook first. Then generate. Citations stay visible.</p>
-          <label className="upload header-upload" htmlFor="atlas-upload-main">
-            Add a document to the corpus
-            <input
-              id="atlas-upload-main"
-              type="file"
-              accept=".md,.txt,.pdf,text/plain,text/markdown,application/pdf"
-              onChange={(event) => {
-                void onUpload(event.target.files?.[0]);
-                event.target.value = "";
-              }}
-            />
-          </label>
+          <p>Retrieve from the handbook. Tools for live tickets. Sources used shows both.</p>
           <div className="pipeline">
             <div className={`step ${stage === "search" ? "active" : ""}`}>
               <b>1 · Retrieve</b>
               Embed the question, search Chroma
             </div>
-            <div className={`step ${stage === "generate" ? "active" : ""}`}>
-              <b>2 · Generate</b>
-              Stream the answer from cited chunks
+            <div className={`step ${stage === "tool" ? "active" : ""}`}>
+              <b>2 · Tool</b>
+              {toolCalls.length
+                ? `${toolCalls.length} function call${toolCalls.length === 1 ? "" : "s"}`
+                : "Model may ask Atlas to run a function"}
             </div>
-            <div className={`step ${sources.length ? "active" : ""}`}>
-              <b>3 · Inspect</b>
-              {sources.length ? `${sources.length} passages` : "Distances appear here"}
+            <div className={`step ${stage === "generate" ? "active" : ""}`}>
+              <b>3 · Generate</b>
+              Stream the answer
             </div>
           </div>
         </header>
         <section className="messages">
           {messages.length === 0 ? (
             <div className="empty">
-              <h2>Ask the corpus.</h2>
+              <h2>Ask the library.</h2>
               <p className="error" hidden={!error}>
                 {error}
               </p>
@@ -315,17 +321,29 @@ export default function App() {
 
       <aside className="panel sources">
         <div>
-          <div className="section-label">Retrieval inspector</div>
+          <div className="section-label">Sources used</div>
           <p style={{ margin: 0, color: "var(--muted)", fontSize: 13 }}>
-            This is the passage Chroma put in {"<context>"}. Demo Note is short, so
-            one chunk is the whole current file — Northstar, office hours, 7-day
-            refund. Lower d= is closer.
+            Chunks retrieve already found, plus any tool JSON. This panel only
+            displays. It does not search.
           </p>
         </div>
         <div className="stack">
-          {sources.length === 0 ? (
+          {toolCalls.map((call, index) => (
+            <article className="source-card tool-card" key={`${call.name}-${index}`}>
+              <header>
+                <strong>{call.name}</strong>
+                <span className="score">tool</span>
+              </header>
+              <p>
+                args {JSON.stringify(call.arguments)}
+                <br />
+                result {call.result}
+              </p>
+            </article>
+          ))}
+          {sources.length === 0 && toolCalls.length === 0 ? (
             <p style={{ color: "var(--muted)" }}>
-              Ask a question. The matching Demo Note passage lands here.
+              Ask a handbook question or ticket T-104. Hits and tool results land here.
             </p>
           ) : (
             sources.map((chunk) => (

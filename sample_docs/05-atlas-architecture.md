@@ -12,6 +12,6 @@ The React app never sees the OpenAI key. Browsers POST to `/api/chat/stream`. Fa
 
 ## What a recruiter can inspect
 
-The right-hand inspector shows the retrieved chunks, cosine distances, and source titles for the latest answer. That is the retrieve half of RAG made visible. The chat pane is the generate half.
+The right-hand **Sources used** panel shows the retrieved chunks, cosine distances, and source titles for the latest answer. That is the retrieve half of RAG made visible. The chat pane is the generate half.
 
 Chat memory is the last 12 messages in the thread. Older turns are not dumped into Chroma.
