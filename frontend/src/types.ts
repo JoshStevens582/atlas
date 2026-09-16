@@ -42,6 +42,13 @@ export type RetrievedChunk = {
 export type StreamEvent =
   | { type: "thread"; thread: ThreadSummary }
   | { type: "sources"; sources: RetrievedChunk[] }
+  | { type: "tool"; name: string; arguments: Record<string, unknown>; result: string }
   | { type: "token"; text: string }
   | { type: "done"; answer: string }
   | { type: "error"; detail: string };
+
+export type ToolCall = {
+  name: string;
+  arguments: Record<string, unknown>;
+  result: string;
+};

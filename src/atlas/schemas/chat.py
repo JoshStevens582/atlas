@@ -9,6 +9,12 @@ class RetrievedChunk(BaseModel):
     distance: float
 
 
+class ToolCallOut(BaseModel):
+    name: str
+    arguments: dict[str, object]
+    result: str
+
+
 class ChatMessageOut(BaseModel):
     id: str
     role: str

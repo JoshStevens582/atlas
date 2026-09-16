@@ -1,5 +1,9 @@
 from atlas.schemas.chat import RetrievedChunk
-from atlas.services.prompting import build_user_payload, keep_close_chunks
+from atlas.services.prompting import (
+    DEVELOPER_INSTRUCTIONS,
+    build_user_payload,
+    keep_close_chunks,
+)
 
 
 def test_empty_retrieval_uses_placeholder_context() -> None:
@@ -57,3 +61,27 @@ def test_keeps_nearest_hit_when_all_exceed_cutoff() -> None:
     )
     kept = keep_close_chunks([farther, nearer], max_distance=0.55)
     assert kept == [nearer]
+
+
+def test_instructions_keep_handbook_and_tickets_separate() -> None:
+    text = DEVELOPER_INSTRUCTIONS.casefold()
+    assert "pure handbook question: do not call a ticket tool" in text
+    assert "pure ticket question: call a ticket tool" in text
+    assert "mixed question" in text
+    assert "combine both in one reply" in text
+
+
+def test_ticket_question_payload_still_includes_handbook_chunks() -> None:
+    chunk = RetrievedChunk(
+        document_id="doc-1",
+        document_title="Vendor Refund Memo",
+        chunk_index=0,
+        text="Official refund window: 14 days from delivery.",
+        distance=0.2,
+    )
+    payload = build_user_payload(
+        "Does ticket T-104 get a refund under the 14-day rule?",
+        [chunk],
+    )
+    assert "14 days from delivery" in payload
+    assert "Does ticket T-104 get a refund under the 14-day rule?" in payload

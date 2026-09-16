@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Atlas",
-    description="Grounded RAG chat with citations and a retrieval inspector.",
+    description="Grounded RAG chat with citations and a Sources used panel.",
     version="0.1.0",
     lifespan=lifespan,
 )

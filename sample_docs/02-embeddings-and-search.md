@@ -15,4 +15,4 @@ Atlas uses OpenAI `text-embedding-3-small` for both documents and questions. The
    document is not dropped to an empty prompt.
 6. Stuff the remaining text into an XML `<context>` envelope and call the chat model.
 
-Lower cosine distance means a closer match. The inspector in the Atlas UI shows this distance for every cited chunk so a reviewer can see why a passage was chosen.
+Lower cosine distance means a closer match. The **Sources used** panel in the Atlas UI shows this distance for every cited chunk so a reviewer can see why a passage was chosen.
