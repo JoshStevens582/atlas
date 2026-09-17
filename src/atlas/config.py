@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     history_window: int = 12
     max_tool_rounds: int = 3
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    atlas_auth_secret: str = "dev-only-change-me"
+    atlas_demo_users: str = "alice:atlas-alice|bob:atlas-bob"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

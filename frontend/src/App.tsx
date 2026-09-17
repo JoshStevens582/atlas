@@ -6,6 +6,9 @@ import {
   fetchHealth,
   fetchThread,
   fetchThreads,
+  hasSession,
+  login,
+  logout,
   streamChat,
   uploadDocument,
 } from "./api";
@@ -41,6 +44,9 @@ const SUGGESTIONS = [
 ];
 
 export default function App() {
+  const [signedIn, setSignedIn] = useState(hasSession());
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [documents, setDocuments] = useState<IndexedDocument[]>([]);
@@ -66,8 +72,17 @@ export default function App() {
   }
 
   useEffect(() => {
-    refreshLists().catch((reason: Error) => setError(reason.message));
-  }, []);
+    if (!signedIn) {
+      return;
+    }
+    refreshLists().catch((reason: Error) => {
+      if (reason.message === "Not authenticated.") {
+        setSignedIn(false);
+        return;
+      }
+      setError(reason.message);
+    });
+  }, [signedIn]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -154,7 +169,11 @@ export default function App() {
         }
       });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Chat failed.");
+      const message = reason instanceof Error ? reason.message : "Chat failed.";
+      if (message === "Not authenticated.") {
+        setSignedIn(false);
+      }
+      setError(message);
     } finally {
       setStreaming(false);
       setStage("idle");
@@ -165,6 +184,29 @@ export default function App() {
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     void send(draft);
+  }
+
+  async function onLogin(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await login(username.trim(), password);
+      setPassword("");
+      setSignedIn(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Login failed.");
+    }
+  }
+
+  function onLogout() {
+    logout();
+    setSignedIn(false);
+    setThreadId(null);
+    setMessages([]);
+    setThreads([]);
+    setDocuments([]);
+    setSources([]);
+    setToolCalls([]);
   }
 
   async function onUpload(file: File | undefined) {
@@ -178,6 +220,43 @@ export default function App() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Upload failed.");
     }
+  }
+
+  if (!signedIn) {
+    return (
+      <div className="login-screen">
+        <form className="panel login-card" onSubmit={(event) => void onLogin(event)}>
+          <div className="brand">
+            <strong>ATLAS</strong>
+            <span>Sign in to your threads</span>
+          </div>
+          <p className="login-copy">
+            Demo logins: alice / atlas-alice or bob / atlas-bob. Each user only sees their own threads.
+          </p>
+          <label>
+            Username
+            <input
+              autoComplete="username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          {error ? <p className="error">{error}</p> : null}
+          <button className="send" disabled={!username.trim() || !password} type="submit">
+            Sign in
+          </button>
+        </form>
+      </div>
+    );
   }
 
   return (
@@ -197,6 +276,9 @@ export default function App() {
         </div>
         <button className="new-chat" onClick={() => { setThreadId(null); setMessages([]); setSources([]); setToolCalls([]); }}>
           New chat
+        </button>
+        <button className="new-chat" onClick={onLogout} type="button">
+          Sign out
         </button>
         <label className="upload" htmlFor="atlas-upload">
           Add document (.md / .txt / .pdf)
