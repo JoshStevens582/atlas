@@ -5,7 +5,9 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from atlas.api.deps import require_user
 from atlas.repositories.sql_repo import DocumentRepository
+from atlas.schemas.auth import AuthUser
 from atlas.schemas.chat import DocumentOut
 from atlas.services.ingest import IngestError, IngestService
 from atlas.services.readers import SUPPORTED_SUFFIXES, DocumentReadError, title_from_path
@@ -30,6 +32,7 @@ def get_session_factory(request: Request) -> async_sessionmaker[AsyncSession]:
 @router.get("", response_model=list[DocumentOut])
 async def list_documents(
     session_factory: Annotated[async_sessionmaker[AsyncSession], Depends(get_session_factory)],
+    _: Annotated[AuthUser, Depends(require_user)],
 ) -> list[DocumentOut]:
     async with session_factory() as session:
         documents = await DocumentRepository(session).list_documents()
@@ -50,6 +53,7 @@ async def upload_document(
     request: Request,
     ingest: Annotated[IngestService, Depends(get_ingest)],
     file: Annotated[UploadFile, File()],
+    _: Annotated[AuthUser, Depends(require_user)],
 ) -> DocumentOut:
     if not request.app.state.settings.openai_api_key:
         raise HTTPException(
@@ -82,6 +86,7 @@ async def upload_document(
 async def delete_document(
     document_id: str,
     ingest: Annotated[IngestService, Depends(get_ingest)],
+    _: Annotated[AuthUser, Depends(require_user)],
 ) -> dict[str, str]:
     deleted = await ingest.delete_document(document_id)
     if not deleted:

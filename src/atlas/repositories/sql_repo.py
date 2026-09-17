@@ -7,13 +7,23 @@ from sqlalchemy.orm import selectinload
 from atlas.db.models import ChatMessage, ChatThread, IndexedDocument
 
 
+class ThreadNotFoundError(LookupError):
+    pass
+
+
+class ThreadAccessDeniedError(PermissionError):
+    pass
+
+
 class ThreadRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_threads(self) -> list[ChatThread]:
+    async def list_threads(self, owner_id: str) -> list[ChatThread]:
         result = await self._session.execute(
-            select(ChatThread).order_by(ChatThread.created_at.desc())
+            select(ChatThread)
+            .where(ChatThread.owner_id == owner_id)
+            .order_by(ChatThread.created_at.desc())
         )
         return list(result.scalars().all())
 
@@ -25,8 +35,16 @@ class ThreadRepository:
         )
         return result.scalar_one_or_none()
 
-    async def create_thread(self, title: str) -> ChatThread:
-        thread = ChatThread(id=str(uuid4()), title=title[:200])
+    async def get_owned_thread(self, thread_id: str, owner_id: str) -> ChatThread:
+        thread = await self.get_thread(thread_id)
+        if thread is None:
+            raise ThreadNotFoundError("Thread not found.")
+        if thread.owner_id != owner_id:
+            raise ThreadAccessDeniedError("Not allowed to access this thread.")
+        return thread
+
+    async def create_thread(self, title: str, owner_id: str) -> ChatThread:
+        thread = ChatThread(id=str(uuid4()), title=title[:200], owner_id=owner_id)
         self._session.add(thread)
         await self._session.commit()
         await self._session.refresh(thread)

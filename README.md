@@ -43,7 +43,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Sample handbook files in `sample_docs/` are indexed on first start.
+Open [http://localhost:5173](http://localhost:5173). Sign in with demo users `alice` / `atlas-alice` or `bob` / `atlas-bob` (threads are per user). Sample handbook files in `sample_docs/` are indexed on first start.
 
 ## Architecture
 

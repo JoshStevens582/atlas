@@ -352,6 +352,48 @@ textarea {
   font-size: 13px;
 }
 
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.login-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.login-card input {
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #0a1220;
+  color: var(--text);
+  padding: 12px 14px;
+}
+
+.login-card .send {
+  min-height: 44px;
+}
+
 .empty {
   margin: auto;
   max-width: 640px;

@@ -41,9 +41,9 @@ class RagChatService:
         self._chunk_store = chunk_store
         self._embeddings = embeddings
 
-    async def list_threads(self) -> list[ThreadOut]:
+    async def list_threads(self, owner_id: str) -> list[ThreadOut]:
         async with self._session_factory() as session:
-            threads = await ThreadRepository(session).list_threads()
+            threads = await ThreadRepository(session).list_threads(owner_id)
         return [
             ThreadOut(
                 id=thread.id,
@@ -53,11 +53,9 @@ class RagChatService:
             for thread in threads
         ]
 
-    async def get_thread(self, thread_id: str) -> ThreadDetailOut | None:
+    async def get_thread(self, thread_id: str, owner_id: str) -> ThreadDetailOut:
         async with self._session_factory() as session:
-            thread = await ThreadRepository(session).get_thread(thread_id)
-        if thread is None:
-            return None
+            thread = await ThreadRepository(session).get_owned_thread(thread_id, owner_id)
         messages = sorted(thread.messages, key=lambda item: item.created_at)
         return ThreadDetailOut(
             id=thread.id,
@@ -74,9 +72,9 @@ class RagChatService:
             ],
         )
 
-    async def create_thread(self, title: str = "New chat") -> ThreadOut:
+    async def create_thread(self, owner_id: str, title: str = "New chat") -> ThreadOut:
         async with self._session_factory() as session:
-            thread = await ThreadRepository(session).create_thread(title)
+            thread = await ThreadRepository(session).create_thread(title, owner_id)
         return ThreadOut(
             id=thread.id,
             title=thread.title,
@@ -125,12 +123,13 @@ class RagChatService:
         self,
         question: str,
         thread_id: str | None,
+        owner_id: str,
     ) -> AsyncIterator[dict[str, Any]]:
         cleaned = question.strip()
         if not cleaned:
             raise ValueError("Message cannot be empty.")
 
-        thread = await self._ensure_thread(thread_id, cleaned)
+        thread = await self._ensure_thread(thread_id, cleaned, owner_id)
         async with self._session_factory() as session:
             repo = ThreadRepository(session)
             history = await repo.last_messages(
@@ -167,18 +166,21 @@ class RagChatService:
             await ThreadRepository(session).add_message(thread.id, "assistant", answer)
         yield {"type": "done", "answer": answer}
 
-    async def _ensure_thread(self, thread_id: str | None, question: str) -> ThreadOut:
+    async def _ensure_thread(
+        self,
+        thread_id: str | None,
+        question: str,
+        owner_id: str,
+    ) -> ThreadOut:
         if thread_id:
-            existing = await self.get_thread(thread_id)
-            if existing is None:
-                raise LookupError("Thread not found.")
+            existing = await self.get_thread(thread_id, owner_id)
             return ThreadOut(
                 id=existing.id,
                 title=existing.title,
                 created_at=existing.created_at,
             )
         title = question if len(question) <= 72 else f"{question[:69]}..."
-        return await self.create_thread(title)
+        return await self.create_thread(owner_id, title)
 
     async def _stream_with_tools(
         self,

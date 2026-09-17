@@ -5,6 +5,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from atlas.api.deps import require_user
+from atlas.repositories.sql_repo import ThreadAccessDeniedError, ThreadNotFoundError
+from atlas.schemas.auth import AuthUser
 from atlas.schemas.chat import ChatRequest, ThreadDetailOut, ThreadOut
 from atlas.services.rag import RagChatService
 
@@ -27,24 +30,33 @@ def require_openai_key(request: Request) -> None:
 
 
 @router.get("/threads", response_model=list[ThreadOut])
-async def list_threads(rag: Annotated[RagChatService, Depends(get_rag)]) -> list[ThreadOut]:
-    return await rag.list_threads()
+async def list_threads(
+    rag: Annotated[RagChatService, Depends(get_rag)],
+    user: Annotated[AuthUser, Depends(require_user)],
+) -> list[ThreadOut]:
+    return await rag.list_threads(user.username)
 
 
 @router.post("/threads", response_model=ThreadOut)
-async def create_thread(rag: Annotated[RagChatService, Depends(get_rag)]) -> ThreadOut:
-    return await rag.create_thread()
+async def create_thread(
+    rag: Annotated[RagChatService, Depends(get_rag)],
+    user: Annotated[AuthUser, Depends(require_user)],
+) -> ThreadOut:
+    return await rag.create_thread(user.username)
 
 
 @router.get("/threads/{thread_id}", response_model=ThreadDetailOut)
 async def get_thread(
     thread_id: str,
     rag: Annotated[RagChatService, Depends(get_rag)],
+    user: Annotated[AuthUser, Depends(require_user)],
 ) -> ThreadDetailOut:
-    thread = await rag.get_thread(thread_id)
-    if thread is None:
-        raise HTTPException(status_code=404, detail="Thread not found.")
-    return thread
+    try:
+        return await rag.get_thread(thread_id, user.username)
+    except ThreadAccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ThreadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Thread not found.") from exc
 
 
 @router.post("/chat/stream")
@@ -52,15 +64,22 @@ async def stream_chat(
     payload: ChatRequest,
     request: Request,
     rag: Annotated[RagChatService, Depends(get_rag)],
+    user: Annotated[AuthUser, Depends(require_user)],
     _: Annotated[None, Depends(require_openai_key)],
 ) -> StreamingResponse:
     async def events() -> AsyncIterator[str]:
         try:
-            async for event in rag.stream_answer(payload.message, payload.thread_id):
+            async for event in rag.stream_answer(
+                payload.message,
+                payload.thread_id,
+                user.username,
+            ):
                 if await request.is_disconnected():
                     break
                 yield _sse(event)
-        except LookupError:
+        except ThreadAccessDeniedError:
+            yield _sse({"type": "error", "detail": "Not allowed to access this thread."})
+        except ThreadNotFoundError:
             yield _sse({"type": "error", "detail": "Thread not found."})
         except ValueError as exc:
             yield _sse({"type": "error", "detail": str(exc)})
