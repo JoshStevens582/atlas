@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,8 +19,24 @@ from atlas.services.ingest import IngestService
 from atlas.services.rag import RagChatService
 
 
+def _configure_logging() -> None:
+    """Ensure Ask traces show in the API terminal (uvicorn may already own root)."""
+    ask_logger = logging.getLogger("atlas.ask")
+    ask_logger.setLevel(logging.INFO)
+    if ask_logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
+    )
+    ask_logger.addHandler(handler)
+    ask_logger.propagate = False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    _configure_logging()
     settings = load_settings()
     Path("data").mkdir(exist_ok=True)
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)

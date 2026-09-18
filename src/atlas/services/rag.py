@@ -13,6 +13,7 @@ from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.repositories.sql_repo import ThreadRepository
 from atlas.schemas.chat import ChatMessageOut, RetrievedChunk, ThreadDetailOut, ThreadOut
 from atlas.services.embeddings import EmbeddingClient
+from atlas.services.observability import AskTrace
 from atlas.services.prompting import (
     DEVELOPER_INSTRUCTIONS,
     build_user_payload,
@@ -129,42 +130,52 @@ class RagChatService:
         if not cleaned:
             raise ValueError("Message cannot be empty.")
 
-        thread = await self._ensure_thread(thread_id, cleaned, owner_id)
-        async with self._session_factory() as session:
-            repo = ThreadRepository(session)
-            history = await repo.last_messages(
-                thread.id,
-                self._settings.history_window,
-            )
-            await repo.add_message(thread.id, "user", cleaned)
+        trace = AskTrace(owner_id=owner_id, model=self._settings.openai_chat_model)
+        trace.record_question_length(cleaned)
+        try:
+            thread = await self._ensure_thread(thread_id, cleaned, owner_id)
+            trace.record_thread(thread.id)
+            async with self._session_factory() as session:
+                repo = ThreadRepository(session)
+                history = await repo.last_messages(
+                    thread.id,
+                    self._settings.history_window,
+                )
+                await repo.add_message(thread.id, "user", cleaned)
 
-        sources = await self.retrieve(cleaned)
-        yield {"type": "thread", "thread": thread.model_dump()}
-        yield {
-            "type": "sources",
-            "sources": [chunk.model_dump() for chunk in sources],
-        }
-
-        prompt_messages: list[EasyInputMessageParam] = _history_as_input(history)
-        prompt_messages.append(
-            {
-                "role": "user",
-                "content": build_user_payload(cleaned, sources),
+            sources = await self.retrieve(cleaned)
+            trace.record_retrieve(sources)
+            yield {"type": "thread", "thread": thread.model_dump()}
+            yield {
+                "type": "sources",
+                "sources": [chunk.model_dump() for chunk in sources],
             }
-        )
-        answer = ""
-        async for event in self._stream_with_tools(prompt_messages):
-            if event.get("type") == "token":
-                answer += str(event.get("text", ""))
-            yield event
-        answer = answer.strip()
-        if not answer:
-            answer = "I could not generate an answer from the retrieved documents."
-            yield {"type": "token", "text": answer}
 
-        async with self._session_factory() as session:
-            await ThreadRepository(session).add_message(thread.id, "assistant", answer)
-        yield {"type": "done", "answer": answer}
+            prompt_messages: list[EasyInputMessageParam] = _history_as_input(history)
+            prompt_messages.append(
+                {
+                    "role": "user",
+                    "content": build_user_payload(cleaned, sources),
+                }
+            )
+            answer = ""
+            async for event in self._stream_with_tools(prompt_messages, trace):
+                if event.get("type") == "token":
+                    answer += str(event.get("text", ""))
+                yield event
+            answer = answer.strip()
+            if not answer:
+                answer = "I could not generate an answer from the retrieved documents."
+                yield {"type": "token", "text": answer}
+
+            async with self._session_factory() as session:
+                await ThreadRepository(session).add_message(thread.id, "assistant", answer)
+            yield {"type": "done", "answer": answer}
+            trace.complete(answer)
+        except Exception as exc:
+            trace.record_error(exc)
+            trace.complete("")
+            raise
 
     async def _ensure_thread(
         self,
@@ -185,6 +196,7 @@ class RagChatService:
     async def _stream_with_tools(
         self,
         prompt_messages: list[EasyInputMessageParam],
+        trace: AskTrace,
     ) -> AsyncIterator[dict[str, Any]]:
         previous_response_id: str | None = None
         tool_outputs: list[dict[str, str]] = []
@@ -198,6 +210,7 @@ class RagChatService:
                 previous_response_id,
                 tool_outputs,
             )
+            trace.record_usage(response)
             previous_response_id = str(getattr(response, "id", "") or "")
             function_calls = _function_calls(response)
             if not function_calls:
@@ -211,6 +224,7 @@ class RagChatService:
                 arguments = str(getattr(call, "arguments", "") or "{}")
                 call_id = str(getattr(call, "call_id", "") or "")
                 result = run_allowlisted_tool(name, arguments)
+                trace.record_tool(name)
                 yield {
                     "type": "tool",
                     "name": name,
