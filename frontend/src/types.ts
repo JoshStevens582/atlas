@@ -31,6 +31,16 @@ export type IndexedDocument = {
   created_at: string;
 };
 
+export type IngestJob = {
+  job_id: string;
+  status: "pending" | "running" | "done" | "failed";
+  title: string;
+  original_filename: string;
+  document_id: string | null;
+  chunk_count: number | null;
+  error: string | null;
+};
+
 export type RetrievedChunk = {
   document_id: string;
   document_title: string;

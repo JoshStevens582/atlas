@@ -12,6 +12,7 @@ from atlas.db.models import ChatMessage
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.repositories.sql_repo import ThreadRepository
 from atlas.schemas.chat import ChatMessageOut, RetrievedChunk, ThreadDetailOut, ThreadOut
+from atlas.services.answer_cache import AnswerCache
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.observability import AskTrace
 from atlas.services.prompting import (
@@ -35,12 +36,14 @@ class RagChatService:
         session_factory: async_sessionmaker[AsyncSession],
         chunk_store: ChromaChunkStore,
         embeddings: EmbeddingClient,
+        answer_cache: AnswerCache | None = None,
     ) -> None:
         self._settings = settings
         self._openai = openai_client
         self._session_factory = session_factory
         self._chunk_store = chunk_store
         self._embeddings = embeddings
+        self._answer_cache = answer_cache
 
     async def list_threads(self, owner_id: str) -> list[ThreadOut]:
         async with self._session_factory() as session:
@@ -151,6 +154,35 @@ class RagChatService:
                 "sources": [chunk.model_dump() for chunk in sources],
             }
 
+            history_pairs = [
+                (item.role, item.content)
+                for item in history
+                if item.role in {"user", "assistant"}
+            ]
+            cache_key: str | None = None
+            if (
+                self._answer_cache is not None
+                and self._settings.answer_cache_enabled
+            ):
+                cache_key = self._answer_cache.build_key(
+                    question=cleaned,
+                    sources=sources,
+                    history=history_pairs,
+                    model=self._settings.openai_chat_model,
+                    instructions=DEVELOPER_INSTRUCTIONS,
+                )
+                cached = await self._answer_cache.get(cache_key)
+                if cached is not None:
+                    answer = str(cached["answer"]).strip()
+                    yield {"type": "token", "text": answer}
+                    async with self._session_factory() as session:
+                        await ThreadRepository(session).add_message(
+                            thread.id, "assistant", answer
+                        )
+                    yield {"type": "done", "answer": answer}
+                    trace.complete(answer)
+                    return
+
             prompt_messages: list[EasyInputMessageParam] = _history_as_input(history)
             prompt_messages.append(
                 {
@@ -159,7 +191,10 @@ class RagChatService:
                 }
             )
             answer = ""
+            used_tools = False
             async for event in self._stream_with_tools(prompt_messages, trace):
+                if event.get("type") == "tool":
+                    used_tools = True
                 if event.get("type") == "token":
                     answer += str(event.get("text", ""))
                 yield event
@@ -167,6 +202,13 @@ class RagChatService:
             if not answer:
                 answer = "I could not generate an answer from the retrieved documents."
                 yield {"type": "token", "text": answer}
+
+            if (
+                cache_key is not None
+                and self._answer_cache is not None
+                and not used_tools
+            ):
+                await self._answer_cache.set(cache_key, answer=answer, sources=sources)
 
             async with self._session_factory() as session:
                 await ThreadRepository(session).add_message(thread.id, "assistant", answer)

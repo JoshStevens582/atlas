@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from atlas.api.deps import require_user
+from atlas.api.deps import enforce_ask_rate_limit, require_user
 from atlas.repositories.sql_repo import ThreadAccessDeniedError, ThreadNotFoundError
 from atlas.schemas.auth import AuthUser
 from atlas.schemas.chat import ChatRequest, ThreadDetailOut, ThreadOut
@@ -64,7 +64,7 @@ async def stream_chat(
     payload: ChatRequest,
     request: Request,
     rag: Annotated[RagChatService, Depends(get_rag)],
-    user: Annotated[AuthUser, Depends(require_user)],
+    user: Annotated[AuthUser, Depends(enforce_ask_rate_limit)],
     _: Annotated[None, Depends(require_openai_key)],
 ) -> StreamingResponse:
     async def events() -> AsyncIterator[str]:

@@ -34,6 +34,7 @@ async def upload_harness(tmp_path: Path) -> AsyncIterator[UploadHarness]:
         atlas_demo_users="alice:secret-a",
         upload_dir=str(upload_dir),
         max_upload_bytes=1024,
+        rate_limit_enabled=False,
     )
     ingest = AsyncMock(spec=IngestService)
     ingest.ingest_path = AsyncMock(
@@ -49,6 +50,7 @@ async def upload_harness(tmp_path: Path) -> AsyncIterator[UploadHarness]:
     app = FastAPI()
     app.state.settings = settings
     app.state.ingest_service = ingest
+    app.state.rate_limiter = None
     app.include_router(auth_router)
     app.include_router(documents_router)
 

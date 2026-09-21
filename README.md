@@ -45,6 +45,47 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173). Sign in with demo users `alice` / `atlas-alice` or `bob` / `atlas-bob` (threads are per user). Sample handbook files in `sample_docs/` are indexed on first start.
 
+### Redis (Library upload queue)
+
+Uploads validate, save the file, then **enqueue** ingest on Redis (`LPUSH` / `BRPOP`). The API returns **202** immediately; a worker chunks, embeds, and writes Chroma + SQLite. Job status: `GET /api/documents/jobs/{job_id}` (`pending` → `running` → `done` / `failed`).
+
+1. Start Redis locally (default `redis://127.0.0.1:6379/0`), e.g. Docker:
+
+```powershell
+docker run -d --name atlas-redis -p 6379:6379 redis:7
+```
+
+2. Optional `.env`: `REDIS_URL=redis://127.0.0.1:6379/0`
+
+With Redis up, the API runs an **embedded worker** by default so one `uvicorn` is enough. For a separate process (production shape):
+
+```powershell
+# .env: INGEST_WORKER_EMBEDDED=false
+uv run python -m atlas.ingest_worker
+```
+
+If Redis is down, Atlas falls back to **synchronous** ingest (same as before) and logs a warning. App rate limits are also skipped until Redis is back.
+
+### Rate limits (cost control)
+
+Users share **your** OpenAI key. Atlas caps abuse in Redis (fail **closed** if Redis is down while limits are on):
+
+| Cap | Default |
+| :--- | :--- |
+| Ask / minute / user | 10 |
+| Ask / day / user | 40 |
+| Ask / day / **whole app** | 200 |
+| Upload / minute / user | 5 |
+| Upload / day / user | 15 |
+
+Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (won’t run uncapped). Local without Redis: `RATE_LIMIT_ENABLED=false`.
+
+**Also set a hard spend limit in the OpenAI dashboard** (Settings → Billing / Limits). That is the last stop if something bypasses the app.
+
+### Ask answer cache
+
+With Redis up, handbook-style Asks cache the finished answer (key = model + instructions + question + retrieved chunks + history). Same Ask again with the same retrieve context → skip the **generate** OpenAI call (retrieve still runs). Ticket/tool Asks are not cached. TTL default 1 hour (`ANSWER_CACHE_TTL_SECONDS`).
+
 ## Architecture
 
 ```text
