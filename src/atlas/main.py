@@ -19,7 +19,7 @@ from atlas.services.answer_cache import AnswerCache
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
-from atlas.services.ingest_worker import process_next_ingest_job
+from atlas.services.ingest_worker import run_worker_loop
 from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter
 from atlas.services.redis_client import connect_redis
@@ -83,14 +83,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     worker_task: asyncio.Task[None] | None = None
     worker_stop = asyncio.Event()
 
+    # Same process as FastAPI: pull Redis notes and run ingest (not Redis itself).
+    # run_worker_loop backs off and retries on Redis errors instead of dying.
     async def _embedded_worker() -> None:
         assert ingest_queue is not None
-        while not worker_stop.is_set():
-            await process_next_ingest_job(
-                ingest_queue,
-                ingest_service,
-                timeout_seconds=1,
-            )
+        await run_worker_loop(
+            ingest_queue,
+            ingest_service,
+            stop=worker_stop,
+            poll_timeout_seconds=1,
+        )
 
     app.state.settings = settings
     app.state.session_factory = session_factory

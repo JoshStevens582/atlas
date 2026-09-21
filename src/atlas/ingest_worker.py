@@ -1,6 +1,7 @@
-"""CLI worker: BRPOP ingest jobs and write Chroma + SQLite.
+"""CLI worker: read Redis notes and run ingest (optional separate process).
 
-Run beside the API when ``ingest_worker_embedded`` is false:
+Redis only stores tickets. This process chunks, calls the embedding model,
+and writes Chroma + SQLite. Default Atlas runs the same loop inside FastAPI.
 
     uv run python -m atlas.ingest_worker
 """
@@ -19,7 +20,7 @@ from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
-from atlas.services.ingest_worker import process_next_ingest_job
+from atlas.services.ingest_worker import run_worker_loop
 from atlas.services.redis_client import connect_redis
 
 logging.basicConfig(
@@ -62,10 +63,8 @@ async def _run() -> None:
 
     logger.info("ingest worker listening on %s", settings.ingest_queue_key)
     try:
-        while not stop.is_set():
-            handled = await process_next_ingest_job(queue, ingest, timeout_seconds=2)
-            if not handled:
-                await asyncio.sleep(0)
+        # Backs off and retries on Redis errors instead of crash-looping.
+        await run_worker_loop(queue, ingest, stop=stop, poll_timeout_seconds=2)
     finally:
         await redis.aclose()
         await engine.dispose()

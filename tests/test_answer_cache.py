@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock
+
 import pytest
 from fakeredis.aioredis import FakeRedis
 
@@ -91,3 +93,34 @@ async def test_answer_cache_key_includes_history() -> None:
     )
     assert key_empty != key_with_history
     await redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_answer_cache_get_degrades_to_miss_on_redis_error() -> None:
+    """The cache is a fast-path optimisation, not the source of truth. A
+    Redis error on read must look like a cache miss (None), never raise and
+    take the whole Ask down with it.
+    """
+    settings = Settings(answer_cache_ttl_seconds=60)
+    redis = AsyncMock()
+    redis.get = AsyncMock(side_effect=ConnectionError("redis gone"))
+    cache = AnswerCache(redis, settings)
+
+    result = await cache.get("atlas:answer:whatever")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_answer_cache_set_swallows_redis_error() -> None:
+    """A Redis error on write must not propagate — failing to cache an
+    answer is not a reason to fail an Ask that already succeeded.
+    """
+    settings = Settings(answer_cache_ttl_seconds=60)
+    redis = AsyncMock()
+    redis.set = AsyncMock(side_effect=ConnectionError("redis gone"))
+    cache = AnswerCache(redis, settings)
+
+    await cache.set("atlas:answer:whatever", answer="Northstar.", sources=[])
+
+    redis.set.assert_awaited_once()

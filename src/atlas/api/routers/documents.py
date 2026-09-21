@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
@@ -19,6 +21,8 @@ from atlas.services.upload_validation import (
     validate_upload_contents,
     validate_upload_suffix,
 )
+
+logger = logging.getLogger("atlas.documents")
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -113,9 +117,13 @@ async def upload_document(
     upload_dir = Path(request.app.state.settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     saved_path = upload_dir / f"{uuid4()}{suffix}"
-    saved_path.write_bytes(contents)
+    # Blocking disk write — off the event loop so one big upload doesn't
+    # stall every other concurrent request.
+    await asyncio.to_thread(saved_path.write_bytes, contents)
     title = title_from_path(Path(filename))
 
+    # Redis path: file already saved; leave a note for the worker; return 202.
+    # Worker (not Redis) chunks, calls the embedding model, writes Chroma later.
     if queue is not None:
         try:
             job = await queue.enqueue(
@@ -124,7 +132,7 @@ async def upload_document(
                 original_filename=filename,
             )
         except IngestQueueError as exc:
-            saved_path.unlink(missing_ok=True)
+            await asyncio.to_thread(saved_path.unlink, missing_ok=True)
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         response.status_code = 202
         return job
@@ -132,8 +140,19 @@ async def upload_document(
     try:
         return await ingest.ingest_path(saved_path, title=title)
     except (DocumentReadError, IngestError) as exc:
-        saved_path.unlink(missing_ok=True)
+        await asyncio.to_thread(saved_path.unlink, missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        # Without this, an OpenAI outage or DB error during the synchronous
+        # (no-Redis) ingest path raised a raw 500 AND left the uploaded file
+        # orphaned on disk with no document row — unlike the Redis worker
+        # path, which already cleans up on any exception (see
+        # services/ingest_worker.py process_next_ingest_job).
+        await asyncio.to_thread(saved_path.unlink, missing_ok=True)
+        logger.exception("synchronous ingest failed unexpectedly")
+        raise HTTPException(
+            status_code=500, detail="Ingest failed unexpectedly."
+        ) from exc
 
 
 @router.delete("/{document_id}")

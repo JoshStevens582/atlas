@@ -46,7 +46,13 @@ class AnswerCache:
         return f"atlas:answer:{digest}"
 
     async def get(self, key: str) -> dict[str, Any] | None:
-        raw = await self._client.get(key)
+        # Cache is a fast-path optimisation, not the source of truth: a Redis
+        # blip here must degrade to a cache miss, never fail the whole Ask.
+        try:
+            raw = await self._client.get(key)
+        except Exception as exc:
+            logger.warning("answer cache get failed key=%s: %s", key[:24], exc)
+            return None
         if raw is None:
             return None
         try:
@@ -69,5 +75,10 @@ class AnswerCache:
             "answer": answer,
             "sources": [chunk.model_dump() for chunk in sources],
         }
-        await self._client.set(key, json.dumps(payload), ex=ttl)
+        try:
+            await self._client.set(key, json.dumps(payload), ex=ttl)
+        except Exception as exc:
+            # Same rule as get(): failing to cache is not failing the Ask.
+            logger.warning("answer cache set failed key=%s: %s", key[:24], exc)
+            return
         logger.info("answer cache store key=%s ttl=%s", key[:24], ttl)
