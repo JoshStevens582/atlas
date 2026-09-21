@@ -10,7 +10,13 @@ from atlas.repositories.sql_repo import DocumentRepository
 from atlas.schemas.auth import AuthUser
 from atlas.schemas.chat import DocumentOut
 from atlas.services.ingest import IngestError, IngestService
-from atlas.services.readers import SUPPORTED_SUFFIXES, DocumentReadError, title_from_path
+from atlas.services.readers import DocumentReadError, title_from_path
+from atlas.services.upload_validation import (
+    UploadValidationError,
+    safe_upload_filename,
+    validate_upload_contents,
+    validate_upload_suffix,
+)
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -60,17 +66,24 @@ async def upload_document(
             status_code=503,
             detail="OPENAI_API_KEY is not set. Add it to your environment or a .env file.",
         )
-    filename = file.filename or "upload.txt"
-    suffix = Path(filename).suffix.lower()
-    if suffix not in SUPPORTED_SUFFIXES:
-        raise HTTPException(status_code=400, detail="Use a .md, .txt, or .pdf file.")
+
+    filename = safe_upload_filename(file.filename)
+    try:
+        suffix = validate_upload_suffix(filename)
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    max_bytes = int(request.app.state.settings.max_upload_bytes)
+    # Read one byte past the limit so oversized files are rejected without a full load.
+    contents = await file.read(max_bytes + 1)
+    try:
+        validate_upload_contents(contents, max_bytes=max_bytes)
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     upload_dir = Path(request.app.state.settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     saved_path = upload_dir / f"{uuid4()}{suffix}"
-    contents = await file.read()
-    if not contents:
-        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
     saved_path.write_bytes(contents)
 
     try:
@@ -79,6 +92,7 @@ async def upload_document(
             title=title_from_path(Path(filename)),
         )
     except (DocumentReadError, IngestError) as exc:
+        saved_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

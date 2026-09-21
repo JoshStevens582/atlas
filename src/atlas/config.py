@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     chroma_path: str = "./data/chroma"
     sample_docs_dir: str = "./sample_docs"
     upload_dir: str = "./data/uploads"
+    max_upload_bytes: int = 5 * 1024 * 1024
     chunk_size: int = 900
     chunk_overlap: int = 150
     retrieve_k: int = 5
