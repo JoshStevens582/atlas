@@ -10,7 +10,8 @@ class UploadValidationError(ValueError):
 def safe_upload_filename(filename: str | None) -> str:
     """Keep only the final path segment so clients cannot smuggle directories."""
     raw = (filename or "upload.txt").strip() or "upload.txt"
-    return Path(raw).name
+    # Normalize Windows separators so Linux CI / servers strip `..\..\` paths too.
+    return Path(raw.replace("\\", "/")).name
 
 
 def validate_upload_suffix(filename: str) -> str:
