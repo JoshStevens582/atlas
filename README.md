@@ -47,7 +47,7 @@ Open [http://localhost:5173](http://localhost:5173). Sign in with demo users `al
 
 ### Redis (Library upload queue)
 
-Uploads validate, save the file, then **enqueue** ingest on Redis (`LPUSH` / `BRPOP`). The API returns **202** immediately; a worker chunks, embeds, and writes Chroma + SQLite. Job status: `GET /api/documents/jobs/{job_id}` (`pending` → `running` → `done` / `failed`).
+Uploads validate, save the file, then **enqueue** ingest on Redis (`LPUSH` / `BRPOP`). The API returns **202** immediately. A **worker** (Python process) then runs ingest: it chunks the file, calls the OpenAI **embedding** model for vectors, and writes Chroma + SQLite. The embedding model only returns numbers; chunking and saves are your code. Job status: `GET /api/documents/jobs/{job_id}` (`pending` → `running` → `done` / `failed`).
 
 1. Start Redis locally (default `redis://127.0.0.1:6379/0`), e.g. Docker:
 
