@@ -11,6 +11,7 @@ import {
   logout,
   streamChat,
   uploadDocument,
+  waitForIngestJob,
 } from "./api";
 import type {
   ChatMessage,
@@ -215,7 +216,13 @@ export default function App() {
     }
     setError(null);
     try {
-      await uploadDocument(file);
+      const accepted = await uploadDocument(file);
+      if ("job_id" in accepted) {
+        const finished = await waitForIngestJob(accepted.job_id);
+        if (finished.status === "failed") {
+          throw new Error(finished.error ?? "Document indexing failed.");
+        }
+      }
       await refreshLists();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Upload failed.");

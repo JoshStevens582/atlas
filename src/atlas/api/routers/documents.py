@@ -2,14 +2,16 @@ from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from atlas.api.deps import require_user
+from atlas.api.deps import enforce_upload_rate_limit, require_user
 from atlas.repositories.sql_repo import DocumentRepository
 from atlas.schemas.auth import AuthUser
 from atlas.schemas.chat import DocumentOut
+from atlas.schemas.ingest_job import IngestJobOut
 from atlas.services.ingest import IngestError, IngestService
+from atlas.services.ingest_queue import IngestQueue, IngestQueueError
 from atlas.services.readers import DocumentReadError, title_from_path
 from atlas.services.upload_validation import (
     UploadValidationError,
@@ -35,6 +37,15 @@ def get_session_factory(request: Request) -> async_sessionmaker[AsyncSession]:
     return factory
 
 
+def get_ingest_queue(request: Request) -> IngestQueue | None:
+    queue = getattr(request.app.state, "ingest_queue", None)
+    if queue is None:
+        return None
+    if not isinstance(queue, IngestQueue):
+        raise RuntimeError("Ingest queue is misconfigured.")
+    return queue
+
+
 @router.get("", response_model=list[DocumentOut])
 async def list_documents(
     session_factory: Annotated[async_sessionmaker[AsyncSession], Depends(get_session_factory)],
@@ -54,13 +65,32 @@ async def list_documents(
     ]
 
 
-@router.post("/upload", response_model=DocumentOut)
+@router.get("/jobs/{job_id}", response_model=IngestJobOut)
+async def get_ingest_job(
+    job_id: str,
+    queue: Annotated[IngestQueue | None, Depends(get_ingest_queue)],
+    _: Annotated[AuthUser, Depends(require_user)],
+) -> IngestJobOut:
+    if queue is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Ingest queue is not available. Start Redis or check REDIS_URL.",
+        )
+    job = await queue.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingest job not found.")
+    return job
+
+
+@router.post("/upload", response_model=DocumentOut | IngestJobOut)
 async def upload_document(
     request: Request,
+    response: Response,
     ingest: Annotated[IngestService, Depends(get_ingest)],
+    queue: Annotated[IngestQueue | None, Depends(get_ingest_queue)],
     file: Annotated[UploadFile, File()],
-    _: Annotated[AuthUser, Depends(require_user)],
-) -> DocumentOut:
+    _: Annotated[AuthUser, Depends(enforce_upload_rate_limit)],
+) -> DocumentOut | IngestJobOut:
     if not request.app.state.settings.openai_api_key:
         raise HTTPException(
             status_code=503,
@@ -74,7 +104,6 @@ async def upload_document(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     max_bytes = int(request.app.state.settings.max_upload_bytes)
-    # Read one byte past the limit so oversized files are rejected without a full load.
     contents = await file.read(max_bytes + 1)
     try:
         validate_upload_contents(contents, max_bytes=max_bytes)
@@ -85,12 +114,23 @@ async def upload_document(
     upload_dir.mkdir(parents=True, exist_ok=True)
     saved_path = upload_dir / f"{uuid4()}{suffix}"
     saved_path.write_bytes(contents)
+    title = title_from_path(Path(filename))
+
+    if queue is not None:
+        try:
+            job = await queue.enqueue(
+                path=str(saved_path),
+                title=title,
+                original_filename=filename,
+            )
+        except IngestQueueError as exc:
+            saved_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        response.status_code = 202
+        return job
 
     try:
-        return await ingest.ingest_path(
-            saved_path,
-            title=title_from_path(Path(filename)),
-        )
+        return await ingest.ingest_path(saved_path, title=title)
     except (DocumentReadError, IngestError) as exc:
         saved_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc

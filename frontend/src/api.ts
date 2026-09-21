@@ -1,6 +1,7 @@
 import type {
   HealthStatus,
   IndexedDocument,
+  IngestJob,
   StreamEvent,
   ThreadDetail,
   ThreadSummary,
@@ -70,7 +71,7 @@ export function fetchDocuments(): Promise<IndexedDocument[]> {
   );
 }
 
-export async function uploadDocument(file: File): Promise<IndexedDocument> {
+export async function uploadDocument(file: File): Promise<IngestJob | IndexedDocument> {
   const data = new FormData();
   data.append("file", file);
   const response = await fetch("/api/documents/upload", {
@@ -78,7 +79,36 @@ export async function uploadDocument(file: File): Promise<IndexedDocument> {
     headers: authHeaders(),
     body: data,
   });
+  if (response.status === 202) {
+    return readJson<IngestJob>(response);
+  }
   return readJson<IndexedDocument>(response);
+}
+
+export async function fetchIngestJob(jobId: string): Promise<IngestJob> {
+  return fetch(`/api/documents/jobs/${jobId}`, { headers: authHeaders() }).then((response) =>
+    readJson<IngestJob>(response),
+  );
+}
+
+export async function waitForIngestJob(
+  jobId: string,
+  {
+    intervalMs = 400,
+    timeoutMs = 120_000,
+  }: { intervalMs?: number; timeoutMs?: number } = {},
+): Promise<IngestJob> {
+  const started = Date.now();
+  for (;;) {
+    const job = await fetchIngestJob(jobId);
+    if (job.status === "done" || job.status === "failed") {
+      return job;
+    }
+    if (Date.now() - started > timeoutMs) {
+      throw new Error("Timed out waiting for document indexing.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 export async function deleteDocument(documentId: string): Promise<void> {
