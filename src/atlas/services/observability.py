@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from pathlib import Path
@@ -41,13 +42,33 @@ def safe_log_fields(fields: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in fields.items() if key.lower() not in _FORBIDDEN_KEYS}
 
 
+def _write_trace_line(line: str) -> None:
+    """Blocking disk write. Only ever call this off the event loop thread."""
+    try:
+        _TRACE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _TRACE_LOG_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except OSError:
+        logger.exception("failed to write ask trace log")
+
+
 def _emit(event: str, fields: dict[str, Any]) -> None:
+    """Called synchronously from AskTrace methods inside async request/stream
+    code (record_retrieve, record_tool, complete). The disk write used to
+    happen inline here, blocking the event loop on every single retrieve,
+    tool call, and completed Ask. Push it to a worker thread instead so
+    logging never stalls request handling.
+    """
     payload = safe_log_fields(fields)
     line = f"{event} {payload}"
     logger.info("%s", line)
-    _TRACE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with _TRACE_LOG_PATH.open("a", encoding="utf-8") as handle:
-        handle.write(line + "\n")
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No event loop (e.g. a script or sync test) — write inline.
+        _write_trace_line(line)
+        return
+    loop.run_in_executor(None, _write_trace_line, line)
 
 
 class AskTrace:

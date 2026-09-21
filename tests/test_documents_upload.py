@@ -171,3 +171,29 @@ async def test_upload_blank_pdf_returns_400_when_reader_fails(
     )
     assert response.status_code == 400
     assert "extractable text" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_upload_sync_fallback_cleans_up_on_unexpected_error(
+    upload_harness: UploadHarness,
+) -> None:
+    """The no-Redis synchronous path used to leak the saved file and return a
+    raw 500 on any exception other than DocumentReadError/IngestError (e.g. an
+    OpenAI outage or a DB error during ingest). It must now clean up and
+    return a clean 500, matching the Redis worker path's behaviour.
+    """
+    headers = await _auth_headers(upload_harness.client)
+    upload_harness.ingest.ingest_path = AsyncMock(
+        side_effect=RuntimeError("OpenAI embeddings API is unreachable.")
+    )
+
+    response = await upload_harness.client.post(
+        "/api/documents/upload",
+        headers=headers,
+        files={"file": ("notes.md", b"# Hello\n", "text/markdown")},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Ingest failed unexpectedly."
+    # No orphaned file left behind on disk.
+    assert list(upload_harness.upload_dir.glob("*")) == []

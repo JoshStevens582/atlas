@@ -1,3 +1,10 @@
+"""Ingest job queue on Redis.
+
+Redis only stores notes + status. It does not index files.
+Upload enqueues here and returns 202; a worker later BRPOPs and runs ingest
+(chunk → call embedding model → write Chroma/SQLite).
+"""
+
 from __future__ import annotations
 
 import logging
@@ -16,7 +23,7 @@ class IngestQueueError(RuntimeError):
 
 
 class IngestQueue:
-    """Redis list queue + per-job status keys for document ingest."""
+    """Redis list of 'index this file' notes + per-job status keys."""
 
     def __init__(self, client: Redis, settings: Settings) -> None:
         self._client = client

@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -5,7 +6,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from atlas.schemas.auth import AuthUser
 from atlas.services.auth import verify_access_token
-from atlas.services.rate_limit import RateLimiter, RateLimitExceeded
+from atlas.services.rate_limit import RateLimiter, RateLimiterUnavailable, RateLimitExceeded
+
+logger = logging.getLogger("atlas.deps")
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -82,3 +85,16 @@ async def _enforce_bucket(request: Request, user: AuthUser, *, bucket: str) -> N
             detail=exc.detail,
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
+    except RateLimiterUnavailable as exc:
+        # Redis was up at startup but dropped mid-request. Match the same
+        # fail-closed contract as "no Redis client at all" below, instead of
+        # letting a raw RedisError bubble up as an uncaught 500.
+        logger.warning("rate limiter unavailable mid-request bucket=%s", bucket)
+        if settings.rate_limit_fail_closed:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Rate limiting requires Redis. Start Redis or set "
+                    "RATE_LIMIT_ENABLED=false for local use without caps."
+                ),
+            ) from exc

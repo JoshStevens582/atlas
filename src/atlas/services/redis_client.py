@@ -1,4 +1,12 @@
-"""Shared Redis connection for ingest queue and rate limits."""
+"""Shared Redis connection.
+
+Redis does three Atlas jobs (it never chunks or calls OpenAI):
+1. Ingest queue — sticky notes for a worker ("index this file later")
+2. Rate-limit counters
+3. Ask answer cache
+
+Upload: save file → write note here → return 202. Worker reads the note and runs ingest.
+"""
 
 from __future__ import annotations
 

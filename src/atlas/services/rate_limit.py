@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from atlas.config import Settings
 
@@ -17,6 +18,15 @@ class RateLimitExceeded(Exception):
         super().__init__(detail)
         self.detail = detail
         self.retry_after_seconds = retry_after_seconds
+
+
+class RateLimiterUnavailable(Exception):
+    """Raised when Redis cannot be reached mid-request (after startup succeeded).
+
+    Distinct from RateLimitExceeded so callers can fail closed (503, matching
+    the documented "no Redis while limits are on -> 503" behaviour) instead of
+    an uncaught RedisError turning into a raw 500.
+    """
 
 
 class RateLimiter:
@@ -81,11 +91,20 @@ class RateLimiter:
                 f"Rate limit blocked for {label}.",
                 retry_after_seconds=max(1, ttl_seconds),
             )
-        count = int(await self._client.incr(key))
-        if count == 1:
-            await self._client.expire(key, max(1, ttl_seconds))
+        try:
+            count = int(await self._client.incr(key))
+            if count == 1:
+                await self._client.expire(key, max(1, ttl_seconds))
+        except RedisError as exc:
+            logger.warning("rate limiter Redis error on incr/expire key=%s: %s", key, exc)
+            raise RateLimiterUnavailable("Redis rate limiter is unreachable.") from exc
+
         if count > limit:
-            ttl = await self._client.ttl(key)
+            try:
+                ttl = await self._client.ttl(key)
+            except RedisError as exc:
+                logger.warning("rate limiter Redis error on ttl key=%s: %s", key, exc)
+                raise RateLimiterUnavailable("Redis rate limiter is unreachable.") from exc
             retry_after = ttl_seconds if ttl is None or ttl < 0 else max(1, int(ttl))
             logger.info("rate limit exceeded key=%s count=%s limit=%s", key, count, limit)
             raise RateLimitExceeded(

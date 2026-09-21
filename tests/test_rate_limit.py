@@ -7,6 +7,7 @@ from fakeredis.aioredis import FakeRedis
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from openai import AsyncOpenAI
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -20,7 +21,7 @@ from atlas.schemas.chat import DocumentOut
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
 from atlas.services.rag import RagChatService
-from atlas.services.rate_limit import RateLimiter, RateLimitExceeded
+from atlas.services.rate_limit import RateLimiter, RateLimiterUnavailable, RateLimitExceeded
 
 
 @pytest.mark.asyncio
@@ -89,6 +90,26 @@ async def test_rate_limiter_blocks_global_daily_budget() -> None:
     with pytest.raises(RateLimitExceeded, match="app daily budget"):
         await limiter.hit(username="alice", bucket="ask")
     await redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_raises_unavailable_on_redis_error() -> None:
+    """A RedisError from Redis mid-request (after startup succeeded) must
+    surface as RateLimiterUnavailable, not an uncaught RedisError that would
+    turn into a raw 500 instead of the documented fail-closed 503.
+    """
+    settings = Settings(
+        rate_limit_ask_per_minute=100,
+        rate_limit_ask_per_day=100,
+        rate_limit_ask_global_per_day=100,
+        rate_limit_window_seconds=60,
+    )
+    redis = AsyncMock()
+    redis.incr = AsyncMock(side_effect=RedisConnectionError("redis gone"))
+    limiter = RateLimiter(redis, settings)
+
+    with pytest.raises(RateLimiterUnavailable):
+        await limiter.hit(username="alice", bucket="ask")
 
 
 @pytest.fixture
@@ -193,6 +214,61 @@ async def test_ask_returns_429_when_over_limit(limited_client: AsyncClient) -> N
     third = await limited_client.post("/api/chat/stream", headers=headers, json=body)
     assert third.status_code == 429
     assert "ask" in third.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_ask_returns_503_when_redis_dies_mid_request() -> None:
+    """End-to-end: RateLimiterUnavailable raised inside deps._enforce_bucket
+    must become the same fail-closed 503 as "no Redis client configured",
+    not an uncaught 500.
+    """
+    settings = Settings(
+        openai_api_key="sk-test",
+        atlas_auth_secret="rate-test-secret-2",
+        atlas_demo_users="alice:secret-a",
+        rate_limit_enabled=True,
+        rate_limit_fail_closed=True,
+    )
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    broken_limiter = AsyncMock(spec=RateLimiter)
+    broken_limiter.hit = AsyncMock(
+        side_effect=RateLimiterUnavailable("Redis is unreachable.")
+    )
+
+    app = FastAPI()
+    app.state.settings = settings
+    app.state.session_factory = factory
+    app.state.rate_limiter = broken_limiter
+    app.state.rag_service = RagChatService(
+        settings,
+        AsyncOpenAI(api_key="sk-test"),
+        factory,
+        cast(ChromaChunkStore, object()),
+        cast(EmbeddingClient, object()),
+    )
+    app.include_router(auth_router)
+    app.include_router(chat_router)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        headers = await _auth_headers(client)
+        response = await client.post(
+            "/api/chat/stream", headers=headers, json={"message": "hello"}
+        )
+    await engine.dispose()
+
+    assert response.status_code == 503
+    assert "Redis" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
