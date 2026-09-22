@@ -41,6 +41,9 @@ def _configure_logging() -> None:
     ask_logger.propagate = False
 
 
+_MIN_JWT_SECRET_BYTES = 32  # RFC 7518 3.2: HS256 keys should be >= the hash output size
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _configure_logging()
@@ -48,6 +51,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Path("data").mkdir(exist_ok=True)
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.chroma_path).mkdir(parents=True, exist_ok=True)
+
+    if 0 < len(settings.atlas_auth_secret.encode("utf-8")) < _MIN_JWT_SECRET_BYTES:
+        logging.getLogger("atlas.auth").warning(
+            "ATLAS_AUTH_SECRET is under %d bytes; set a longer, random secret "
+            "before deploying so JWTs can't be brute-forced.",
+            _MIN_JWT_SECRET_BYTES,
+        )
 
     engine = create_engine(settings)
     await init_database(engine)
