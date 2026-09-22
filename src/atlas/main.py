@@ -16,6 +16,7 @@ from atlas.config import load_settings
 from atlas.db.session import create_engine, create_session_factory, init_database
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.services.answer_cache import AnswerCache
+from atlas.services.auth import seed_demo_users
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
@@ -51,6 +52,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_engine(settings)
     await init_database(engine)
     session_factory = create_session_factory(engine)
+    if settings.atlas_auth_secret:
+        await seed_demo_users(session_factory, settings)
     openai_client = AsyncOpenAI(api_key=settings.openai_api_key or None)
     embeddings = EmbeddingClient(openai_client, settings.openai_embedding_model)
     chunk_store = ChromaChunkStore(settings.chroma_path)

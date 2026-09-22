@@ -8,7 +8,9 @@ import {
   fetchThreads,
   hasSession,
   login,
+  loginAsDemo,
   logout,
+  signup,
   streamChat,
   uploadDocument,
   waitForIngestJob,
@@ -48,6 +50,8 @@ export default function App() {
   const [signedIn, setSignedIn] = useState(hasSession());
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [demoLoading, setDemoLoading] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [documents, setDocuments] = useState<IndexedDocument[]>([]);
@@ -191,11 +195,28 @@ export default function App() {
     event.preventDefault();
     setError(null);
     try {
-      await login(username.trim(), password);
+      if (authMode === "signup") {
+        await signup(username.trim(), password);
+      } else {
+        await login(username.trim(), password);
+      }
       setPassword("");
       setSignedIn(true);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Login failed.");
+      setError(reason instanceof Error ? reason.message : "Sign-in failed.");
+    }
+  }
+
+  async function onDemoLogin() {
+    setError(null);
+    setDemoLoading(true);
+    try {
+      await loginAsDemo();
+      setSignedIn(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Demo login failed.");
+    } finally {
+      setDemoLoading(false);
     }
   }
 
@@ -235,10 +256,19 @@ export default function App() {
         <form className="panel login-card" onSubmit={(event) => void onLogin(event)}>
           <div className="brand">
             <strong>ATLAS</strong>
-            <span>Sign in to your threads</span>
+            <span>{authMode === "signup" ? "Create an account" : "Sign in to your threads"}</span>
           </div>
+          <button
+            type="button"
+            className="new-chat"
+            onClick={() => void onDemoLogin()}
+            disabled={demoLoading}
+          >
+            {demoLoading ? "Signing in..." : "Continue as demo user"}
+          </button>
           <p className="login-copy">
-            Demo logins: alice / atlas-alice or bob / atlas-bob. Each user only sees their own threads.
+            No signup needed — one click, browses as a real seeded account.
+            Each user only sees their own threads.
           </p>
           <label>
             Username
@@ -252,14 +282,27 @@ export default function App() {
             Password
             <input
               type="password"
-              autoComplete="current-password"
+              autoComplete={authMode === "signup" ? "new-password" : "current-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
+          {authMode === "signup" ? (
+            <p className="login-copy">Passwords are bcrypt-hashed — 8 characters minimum.</p>
+          ) : null}
           {error ? <p className="error">{error}</p> : null}
           <button className="send" disabled={!username.trim() || !password} type="submit">
-            Sign in
+            {authMode === "signup" ? "Create account" : "Sign in"}
+          </button>
+          <button
+            type="button"
+            className="new-chat"
+            onClick={() => {
+              setError(null);
+              setAuthMode((mode) => (mode === "signup" ? "login" : "signup"));
+            }}
+          >
+            {authMode === "signup" ? "Have an account? Sign in" : "New here? Create an account"}
           </button>
         </form>
       </div>

@@ -43,7 +43,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Sign in with demo users `alice` / `atlas-alice` or `bob` / `atlas-bob` (threads are per user). Sample handbook files in `sample_docs/` are indexed on first start.
+Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look (no signup), sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or create your own account — signup is real: passwords are bcrypt-hashed and stored in SQLite, not a hardcoded list. Threads are per user. Sample handbook files in `sample_docs/` are indexed on first start.
 
 ### Redis (Library upload queue)
 

@@ -15,6 +15,7 @@ dependencies = [
     "uvicorn[standard]>=0.35.0",
     "itsdangerous>=2.2.0",
     "redis>=8.1.0",
+    "bcrypt>=4.2.0",
 ]
 
 [build-system]

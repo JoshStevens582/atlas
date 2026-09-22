@@ -18,6 +18,7 @@ from atlas.config import Settings
 from atlas.db.models import Base
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.schemas.chat import DocumentOut
+from atlas.services.auth import seed_demo_users
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
 from atlas.services.rag import RagChatService
@@ -136,6 +137,7 @@ async def limited_client() -> AsyncIterator[AsyncClient]:
         rate_limit_window_seconds=60,
         upload_dir="./data/uploads",
     )
+    await seed_demo_users(factory, settings)
     redis = FakeRedis(decode_responses=True)
     limiter = RateLimiter(redis, settings)
     ingest = AsyncMock(spec=IngestService)
@@ -237,6 +239,7 @@ async def test_ask_returns_503_when_redis_dies_mid_request() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    await seed_demo_users(factory, settings)
 
     broken_limiter = AsyncMock(spec=RateLimiter)
     broken_limiter.hit = AsyncMock(
@@ -288,6 +291,7 @@ async def test_ask_returns_503_when_redis_missing_and_fail_closed() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    await seed_demo_users(factory, settings)
     app = FastAPI()
     app.state.settings = settings
     app.state.session_factory = factory
