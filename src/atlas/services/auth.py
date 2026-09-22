@@ -5,25 +5,28 @@ ordinary rows in the same table, seeded once on startup (see
 ``seed_demo_users``) — the login screen shows their password so recruiters
 can click straight in, but nothing about how they're stored is special-cased.
 
-Session tokens (``issue_access_token`` / ``verify_access_token``) are
-unchanged from before: a signed, time-limited token. We deliberately do not
-hit the database on every authenticated request to re-check the user still
-exists — the signature + 7-day expiry *is* the session. That trades instant
-revocation (e.g. an admin deleting a user mid-session) for not adding a DB
-round trip to every single API call. Worth calling out as a real design
-choice, not an oversight, if it comes up.
+Session tokens (``issue_access_token`` / ``verify_access_token``) are real
+JWTs (HS256, signed with ``ATLAS_AUTH_SECRET``): standard header.payload.signature
+format, `sub` + `iat` + `exp` claims, verified with PyJWT. We deliberately do
+not hit the database on every authenticated request to re-check the user
+still exists — the signature + `exp` claim *is* the session. That trades
+instant revocation (e.g. an admin deleting a user mid-session) for not
+adding a DB round trip to every single API call. Worth calling out as a
+real design choice, not an oversight, if it comes up.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import bcrypt
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atlas.config import Settings
 from atlas.repositories.user_repo import UsernameTakenError, UserRepository
 
-TOKEN_SALT = "atlas-access-v1"
+JWT_ALGORITHM = "HS256"
 TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
 
 MIN_USERNAME_LENGTH = 3
@@ -114,19 +117,26 @@ async def seed_demo_users(
 
 
 def issue_access_token(settings: Settings, username: str) -> str:
-    serializer = URLSafeTimedSerializer(settings.atlas_auth_secret, salt=TOKEN_SALT)
-    return str(serializer.dumps({"sub": username}))
+    now = datetime.now(UTC)
+    payload = {
+        "sub": username,
+        "iat": now,
+        "exp": now + timedelta(seconds=TOKEN_MAX_AGE_SECONDS),
+    }
+    return jwt.encode(payload, settings.atlas_auth_secret, algorithm=JWT_ALGORITHM)
 
 
 def verify_access_token(settings: Settings, token: str) -> str | None:
     if not token.strip() or not settings.atlas_auth_secret:
         return None
-    serializer = URLSafeTimedSerializer(settings.atlas_auth_secret, salt=TOKEN_SALT)
     try:
-        payload = serializer.loads(token, max_age=TOKEN_MAX_AGE_SECONDS)
-    except (BadSignature, SignatureExpired):
-        return None
-    if not isinstance(payload, dict):
+        # algorithms= is required, not optional: without pinning it, a
+        # forged token could switch algorithms (e.g. to "none") and skip
+        # signature verification entirely — a real, historical JWT bug class.
+        payload = jwt.decode(
+            token, settings.atlas_auth_secret, algorithms=[JWT_ALGORITHM]
+        )
+    except jwt.InvalidTokenError:
         return None
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:

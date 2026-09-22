@@ -1,7 +1,8 @@
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
-from itsdangerous import URLSafeTimedSerializer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -9,7 +10,7 @@ from atlas.config import Settings
 from atlas.db.models import Base
 from atlas.repositories.user_repo import UserRepository
 from atlas.services.auth import (
-    TOKEN_SALT,
+    JWT_ALGORITHM,
     AuthError,
     authenticate_user,
     hash_password,
@@ -175,16 +176,29 @@ def test_token_from_other_secret_is_rejected() -> None:
     assert verify_access_token(other, token) is None
 
 
-def test_verify_rejects_non_dict_payload() -> None:
-    settings = Settings(atlas_auth_secret="unit-test-secret")
-    serializer = URLSafeTimedSerializer(settings.atlas_auth_secret, salt=TOKEN_SALT)
-    token = serializer.dumps(["not", "a", "dict"])
-    assert verify_access_token(settings, str(token)) is None
-
-
 @pytest.mark.parametrize("payload", [{"sub": ""}, {"sub": 123}, {}])
 def test_verify_rejects_missing_or_empty_subject(payload: dict[str, object]) -> None:
     settings = Settings(atlas_auth_secret="unit-test-secret")
-    serializer = URLSafeTimedSerializer(settings.atlas_auth_secret, salt=TOKEN_SALT)
-    token = serializer.dumps(payload)
-    assert verify_access_token(settings, str(token)) is None
+    token = jwt.encode(payload, settings.atlas_auth_secret, algorithm=JWT_ALGORITHM)
+    assert verify_access_token(settings, token) is None
+
+
+def test_verify_rejects_expired_token() -> None:
+    settings = Settings(atlas_auth_secret="unit-test-secret")
+    expired = datetime.now(UTC) - timedelta(days=1)
+    token = jwt.encode(
+        {"sub": "alice", "exp": expired},
+        settings.atlas_auth_secret,
+        algorithm=JWT_ALGORITHM,
+    )
+    assert verify_access_token(settings, token) is None
+
+
+def test_verify_rejects_alg_none_forged_token() -> None:
+    """A real, historical JWT vulnerability class: if the verifier doesn't
+    pin an algorithm, a forged token can set alg to "none" and skip
+    signature verification entirely. Pinning algorithms=[JWT_ALGORITHM] in
+    verify_access_token is what closes this off."""
+    settings = Settings(atlas_auth_secret="unit-test-secret")
+    forged = jwt.encode({"sub": "alice"}, "", algorithm="none")
+    assert verify_access_token(settings, forged) is None
