@@ -38,15 +38,28 @@ export function logout(): void {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-export async function login(username: string, password: string): Promise<string> {
-  const response = await fetch("/api/auth/login", {
+async function loginRequest(path: string, body?: unknown): Promise<string> {
+  const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const body = await readJson<{ access_token: string; username: string }>(response);
-  sessionStorage.setItem(TOKEN_KEY, body.access_token);
-  return body.username;
+  const parsed = await readJson<{ access_token: string; username: string }>(response);
+  sessionStorage.setItem(TOKEN_KEY, parsed.access_token);
+  return parsed.username;
+}
+
+export function login(username: string, password: string): Promise<string> {
+  return loginRequest("/api/auth/login", { username, password });
+}
+
+export function signup(username: string, password: string): Promise<string> {
+  return loginRequest("/api/auth/signup", { username, password });
+}
+
+/** One click, no typing: logs in as the seeded demo account. */
+export function loginAsDemo(): Promise<string> {
+  return loginRequest("/api/auth/demo");
 }
 
 export function fetchHealth(): Promise<HealthStatus> {

@@ -1298,6 +1298,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
+    { name = "bcrypt" },
     { name = "chromadb" },
     { name = "fastapi" },
     { name = "itsdangerous" },
@@ -1325,6 +1326,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.21.0" },
+    { name = "bcrypt", specifier = ">=4.2.0" },
     { name = "chromadb", specifier = ">=1.0.0" },
     { name = "fastapi", specifier = ">=0.116.0" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
