@@ -12,7 +12,7 @@ from atlas.api.routers.auth import router as auth_router
 from atlas.api.routers.chat import router as chat_router
 from atlas.api.routers.documents import router as documents_router
 from atlas.api.routers.health import router as health_router
-from atlas.config import load_settings
+from atlas.config import load_settings, require_secure_auth_secret
 from atlas.db.session import create_engine, create_session_factory, init_database
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.services.answer_cache import AnswerCache
@@ -41,23 +41,14 @@ def _configure_logging() -> None:
     ask_logger.propagate = False
 
 
-_MIN_JWT_SECRET_BYTES = 32  # RFC 7518 3.2: HS256 keys should be >= the hash output size
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _configure_logging()
     settings = load_settings()
+    require_secure_auth_secret(settings)
     Path("data").mkdir(exist_ok=True)
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.chroma_path).mkdir(parents=True, exist_ok=True)
-
-    if 0 < len(settings.atlas_auth_secret.encode("utf-8")) < _MIN_JWT_SECRET_BYTES:
-        logging.getLogger("atlas.auth").warning(
-            "ATLAS_AUTH_SECRET is under %d bytes; set a longer, random secret "
-            "before deploying so JWTs can't be brute-forced.",
-            _MIN_JWT_SECRET_BYTES,
-        )
 
     engine = create_engine(settings)
     await init_database(engine)

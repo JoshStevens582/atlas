@@ -30,6 +30,14 @@ SQLite is **not** the vector database. ChromaDB is. Atlas embeds with OpenAI and
 
 You need Python 3.12+, Node 20+, and `OPENAI_API_KEY` in the environment (or a `.env` file in this folder). Copy `.env.example` and fill in your key. Never commit `.env`.
 
+You also need `ATLAS_AUTH_SECRET` set to a real random value — the app refuses to start with the shipped default or a secret under 32 bytes, since anyone who has read the source knows the default and could forge session JWTs with it:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Put the output in `.env` as `ATLAS_AUTH_SECRET=...`.
+
 ```powershell
 uv sync --group dev
 uv run uvicorn atlas.main:app --reload --host 127.0.0.1 --port 8787 --app-dir src
