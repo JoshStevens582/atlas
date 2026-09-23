@@ -1,5 +1,15 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Shipped in this repo's source, so anyone who has read it knows this value —
+# it must never be the secret an app actually runs with.
+INSECURE_DEFAULT_AUTH_SECRET = "dev-only-change-me"
+# RFC 7518 3.2: HS256 keys should be >= the hash output size (32 bytes).
+MIN_AUTH_SECRET_BYTES = 32
+
+
+class InsecureAuthSecretError(RuntimeError):
+    """ATLAS_AUTH_SECRET is missing a real value at startup."""
+
 
 class Settings(BaseSettings):
     openai_api_key: str = ""
@@ -44,3 +54,31 @@ class Settings(BaseSettings):
 
 def load_settings() -> Settings:
     return Settings()
+
+
+def require_secure_auth_secret(settings: Settings) -> None:
+    """Refuse to start with the shipped default or a too-short JWT secret.
+
+    An empty secret is a deliberate, already-handled "auth disabled" state
+    (see api/routers/auth.py: ``_require_auth_secret`` returns 503 for every
+    auth route in that case) — this only blocks the insecure-but-non-empty
+    cases: the literal default from this file, or anything shorter than the
+    HS256 output size.
+    """
+    secret = settings.atlas_auth_secret
+    if not secret:
+        return
+    if secret == INSECURE_DEFAULT_AUTH_SECRET:
+        raise InsecureAuthSecretError(
+            "ATLAS_AUTH_SECRET is still the shipped default "
+            f"({INSECURE_DEFAULT_AUTH_SECRET!r}). Anyone who has read this "
+            "repo's source knows it, so it can be used to forge session "
+            "JWTs. Set ATLAS_AUTH_SECRET to a random secret before starting "
+            "the app."
+        )
+    if len(secret.encode("utf-8")) < MIN_AUTH_SECRET_BYTES:
+        raise InsecureAuthSecretError(
+            f"ATLAS_AUTH_SECRET is under {MIN_AUTH_SECRET_BYTES} bytes; "
+            "JWTs signed with it can be brute-forced. Set a longer, random "
+            "secret before starting the app."
+        )
