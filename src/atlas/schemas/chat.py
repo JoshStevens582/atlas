@@ -7,6 +7,7 @@ class RetrievedChunk(BaseModel):
     chunk_index: int
     text: str
     distance: float
+    match: str = "vector"
 
 
 class ToolCallOut(BaseModel):

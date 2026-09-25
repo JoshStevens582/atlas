@@ -484,6 +484,7 @@ export default function App() {
                   <strong>{displayTitle(chunk.document_title)}</strong>
                   <span className="score">
                     chunk {chunk.chunk_index + 1} · d={chunk.distance.toFixed(3)}
+                    {chunk.match ? ` · ${chunk.match}` : ""}
                   </span>
                 </header>
                 <p>{chunk.text}</p>

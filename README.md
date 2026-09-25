@@ -21,6 +21,7 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 | API | FastAPI, async | Router → service → repository |
 | Chat DB | SQLite via SQLAlchemy | Threads, messages, document *metadata* only |
 | **Vector DB** | **ChromaDB** (cosine, persistent under `data/chroma`) | Chunk embeddings + nearest-neighbor search |
+| **Hybrid retrieve** | Chroma vectors + **BM25** keywords, fused with RRF | Rare words / ids that cosine can miss |
 | Model | OpenAI `gpt-4o-mini` + `text-embedding-3-small` | Streaming Responses API |
 | UI | React + TypeScript | SSE tokens, citations, Sources used panel |
 
@@ -97,7 +98,7 @@ With Redis up, handbook-style Asks cache the finished answer (key = model + inst
 ```text
 Browser  --POST /api/chat/stream-->  FastAPI
                                       1. embed question
-                                      2. query Chroma (top-k, distance cutoff)
+                                      2. query Chroma (vectors) + BM25 (keywords), fuse with RRF
                                       3. wrap hits in <context>, question in <user_query>
                                       4. stream tokens from OpenAI as SSE
                                       5. save the turn in SQLite

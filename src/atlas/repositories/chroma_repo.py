@@ -80,6 +80,31 @@ class ChromaChunkStore:
         )
         return _parse_query_results(results)
 
+    def list_chunks(self) -> list[RetrievedChunk]:
+        """Every indexed chunk. Used by BM25 so keyword search sees the same corpus."""
+        if self.count() == 0:
+            return []
+        results = self._collection.get(include=["documents", "metadatas"])
+        documents = results.get("documents") or []
+        metadatas = results.get("metadatas") or []
+        chunks: list[RetrievedChunk] = []
+        for text, metadata in zip(documents, metadatas, strict=False):
+            if not text or metadata is None:
+                continue
+            raw_index = metadata.get("chunk_index", 0)
+            chunk_index = raw_index if isinstance(raw_index, int) else 0
+            chunks.append(
+                RetrievedChunk(
+                    document_id=str(metadata.get("document_id", "")),
+                    document_title=str(metadata.get("document_title", "Untitled")),
+                    chunk_index=chunk_index,
+                    text=str(text),
+                    distance=1.0,
+                    match="lexical",
+                )
+            )
+        return chunks
+
     def delete_document(self, document_id: str) -> None:
         self._collection.delete(where={"document_id": document_id})
 
