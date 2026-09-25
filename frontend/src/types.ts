@@ -48,6 +48,8 @@ export type RetrievedChunk = {
   text: string;
   distance: number;
   match?: "vector" | "lexical" | "both";
+  cite_n?: number;
+  cited?: boolean | null;
 };
 
 export type StreamEvent =

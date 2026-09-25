@@ -455,8 +455,9 @@ export default function App() {
         <div>
           <div className="section-label">Sources used</div>
           <p style={{ margin: 0, color: "var(--muted)", fontSize: 13 }}>
-            Chunks retrieve already found, plus any tool JSON. This panel only
-            displays. It does not search.
+            Chunks retrieve already found, plus any tool JSON. [n] in the
+            answer is which card the sentence used. This panel only displays.
+            It does not search.
           </p>
         </div>
         <div className="stack">
@@ -478,18 +479,29 @@ export default function App() {
               Ask a handbook question or ticket T-104. Hits and tool results land here.
             </p>
           ) : (
-            sources.map((chunk) => (
-              <article className="source-card" key={`${chunk.document_id}-${chunk.chunk_index}`}>
-                <header>
-                  <strong>{displayTitle(chunk.document_title)}</strong>
-                  <span className="score">
-                    chunk {chunk.chunk_index + 1} · d={chunk.distance.toFixed(3)}
-                    {chunk.match ? ` · ${chunk.match}` : ""}
-                  </span>
-                </header>
-                <p>{chunk.text}</p>
-              </article>
-            ))
+            sources.map((chunk, index) => {
+              const citeN = chunk.cite_n && chunk.cite_n > 0 ? chunk.cite_n : index + 1;
+              const unused = chunk.cited === false;
+              return (
+                <article
+                  className={unused ? "source-card unused" : "source-card"}
+                  key={`${chunk.document_id}-${chunk.chunk_index}`}
+                >
+                  <header>
+                    <strong>
+                      [{citeN}] {displayTitle(chunk.document_title)}
+                    </strong>
+                    <span className="score">
+                      chunk {chunk.chunk_index + 1} · d={chunk.distance.toFixed(3)}
+                      {chunk.match ? ` · ${chunk.match}` : ""}
+                      {chunk.cited === true ? " · in answer" : ""}
+                      {unused ? " · not in answer" : ""}
+                    </span>
+                  </header>
+                  <p>{chunk.text}</p>
+                </article>
+              );
+            })
           )}
         </div>
       </aside>
