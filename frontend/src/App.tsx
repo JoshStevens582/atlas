@@ -42,7 +42,7 @@ const SUGGESTIONS = [
   },
   {
     title: "List all support tickets",
-    detail: "Not in the handbook — should call get_support_ticket with no id.",
+    detail: "Not in the handbook — should call list_support_tickets.",
   },
 ];
 
