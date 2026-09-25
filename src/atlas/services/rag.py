@@ -13,6 +13,7 @@ from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.repositories.sql_repo import ThreadRepository
 from atlas.schemas.chat import ChatMessageOut, RetrievedChunk, ThreadDetailOut, ThreadOut
 from atlas.services.answer_cache import AnswerCache
+from atlas.services.citations import assign_cite_numbers, mark_cited_chunks
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.hybrid import bm25_rank, fuse_hybrid
 from atlas.services.observability import AskTrace
@@ -119,7 +120,7 @@ class RagChatService:
         if not cleaned:
             raise ValueError("Message cannot be empty.")
 
-        sources = await self.retrieve(cleaned)
+        sources = assign_cite_numbers(await self.retrieve(cleaned))
         response = await self._openai.responses.create(
             model=self._settings.openai_chat_model,
             instructions=DEVELOPER_INSTRUCTIONS,
@@ -137,7 +138,7 @@ class RagChatService:
         answer = response.output_text.strip()
         if not answer:
             answer = "I could not generate an answer from the retrieved documents."
-        return sources, answer
+        return mark_cited_chunks(sources, answer), answer
 
     async def run_ask(
         self,
@@ -162,7 +163,7 @@ class RagChatService:
                 )
                 await repo.add_message(thread.id, "user", cleaned)
 
-            sources = await self.retrieve(cleaned)
+            sources = assign_cite_numbers(await self.retrieve(cleaned))
             trace.record_retrieve(sources)
             yield {"type": "thread", "thread": thread.model_dump()}
             yield {
@@ -190,6 +191,11 @@ class RagChatService:
                 cached = await self._answer_cache.get(cache_key)
                 if cached is not None:
                     answer = str(cached["answer"]).strip()
+                    sources = mark_cited_chunks(sources, answer)
+                    yield {
+                        "type": "sources",
+                        "sources": [chunk.model_dump() for chunk in sources],
+                    }
                     yield {"type": "token", "text": answer}
                     async with self._session_factory() as session:
                         await ThreadRepository(session).add_message(
@@ -218,6 +224,12 @@ class RagChatService:
             if not answer:
                 answer = "I could not generate an answer from the retrieved documents."
                 yield {"type": "token", "text": answer}
+
+            sources = mark_cited_chunks(sources, answer)
+            yield {
+                "type": "sources",
+                "sources": [chunk.model_dump() for chunk in sources],
+            }
 
             if (
                 cache_key is not None

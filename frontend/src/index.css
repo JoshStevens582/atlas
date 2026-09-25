@@ -320,6 +320,10 @@ textarea {
   background: #0a1220;
 }
 
+.source-card.unused {
+  opacity: 0.55;
+}
+
 .source-card header {
   display: flex;
   justify-content: space-between;

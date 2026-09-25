@@ -17,6 +17,8 @@ Atlas uses OpenAI `text-embedding-3-small` for both documents and questions. The
    that vectors miss still rank.
 7. Fuse the two ranked lists with reciprocal rank fusion (RRF). A chunk in
    both lists ranks above a one-list hit.
-8. Stuff the remaining text into an XML `<context>` envelope and call the chat model.
+8. Number those chunks `[1]`, `[2]` in the `<context>` envelope and call the chat model.
+9. After the model writes, keep only citation numbers that match a real chunk.
+   Sources used shows which cards the answer actually cited.
 
-Lower cosine distance means a closer match. The **Sources used** panel in the Atlas UI shows this distance for every cited chunk so a reviewer can see why a passage was chosen.
+Lower cosine distance means a closer match. The **Sources used** panel in the Atlas UI shows this distance for every retrieved chunk so a reviewer can see why a passage was chosen.

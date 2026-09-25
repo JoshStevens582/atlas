@@ -8,6 +8,8 @@ class RetrievedChunk(BaseModel):
     text: str
     distance: float
     match: str = "vector"
+    cite_n: int = 0
+    cited: bool | None = None
 
 
 class ToolCallOut(BaseModel):
