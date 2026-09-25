@@ -24,7 +24,11 @@ from atlas.services.prompting import (
 )
 from atlas.services.tools import (
     ATLAS_TOOLS,
+    ONLY_ONE_TICKET_TOOL,
+    is_ticket_tool,
+    order_tool_calls,
     parse_tool_arguments,
+    resolve_ticket_call,
     run_allowlisted_tool,
 )
 
@@ -214,7 +218,11 @@ class RagChatService:
             )
             answer = ""
             used_tools = False
-            async for event in self._call_chat_model(prompt_messages, trace):
+            async for event in self._call_chat_model(
+                prompt_messages,
+                trace,
+                cleaned,
+            ):
                 if event.get("type") == "tool":
                     used_tools = True
                 if event.get("type") == "token":
@@ -267,12 +275,14 @@ class RagChatService:
         self,
         prompt_messages: list[EasyInputMessageParam],
         trace: AskTrace,
+        question: str,
     ) -> AsyncIterator[dict[str, Any]]:
         previous_response_id: str | None = None
         tool_outputs: list[dict[str, str]] = []
         max_rounds = self._settings.max_tool_rounds
         if max_rounds < 1:
             max_rounds = 1
+        used_ticket_tool = False
 
         for _round in range(max_rounds + 1):
             text_parts, response = await self._complete_model_round(
@@ -289,18 +299,24 @@ class RagChatService:
                 return
 
             tool_outputs = []
-            for call in function_calls:
+            for call in order_tool_calls(function_calls):
                 name = str(getattr(call, "name", "") or "")
                 arguments = str(getattr(call, "arguments", "") or "{}")
+                name, arguments = resolve_ticket_call(name, arguments, question)
                 call_id = str(getattr(call, "call_id", "") or "")
-                result = run_allowlisted_tool(name, arguments)
-                trace.record_tool(name)
-                yield {
-                    "type": "tool",
-                    "name": name,
-                    "arguments": parse_tool_arguments(arguments),
-                    "result": result,
-                }
+                if is_ticket_tool(name) and used_ticket_tool:
+                    result = ONLY_ONE_TICKET_TOOL
+                else:
+                    result = run_allowlisted_tool(name, arguments)
+                    if is_ticket_tool(name):
+                        used_ticket_tool = True
+                    trace.record_tool(name)
+                    yield {
+                        "type": "tool",
+                        "name": name,
+                        "arguments": parse_tool_arguments(arguments),
+                        "result": result,
+                    }
                 tool_outputs.append(
                     {
                         "type": "function_call_output",
