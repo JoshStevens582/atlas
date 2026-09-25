@@ -32,6 +32,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         openai_api_key="",
         atlas_auth_secret="http-test-secret",
         atlas_demo_users="alice:secret-a|bob:secret-b",
+        rate_limit_enabled=False,
     )
     await seed_demo_users(factory, settings)
     app = FastAPI()
@@ -128,7 +129,11 @@ async def test_login_requires_auth_secret_configured() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    settings = Settings(atlas_auth_secret="", atlas_demo_users="alice:secret-a")
+    settings = Settings(
+        atlas_auth_secret="",
+        atlas_demo_users="alice:secret-a",
+        rate_limit_enabled=False,
+    )
     app = FastAPI()
     app.state.settings = settings
     app.state.session_factory = factory
@@ -151,7 +156,11 @@ async def test_demo_login_503_when_no_demo_account_configured() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    settings = Settings(atlas_auth_secret="http-test-secret", atlas_demo_users="")
+    settings = Settings(
+        atlas_auth_secret="http-test-secret",
+        atlas_demo_users="",
+        rate_limit_enabled=False,
+    )
     app = FastAPI()
     app.state.settings = settings
     app.state.session_factory = factory
