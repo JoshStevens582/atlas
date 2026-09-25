@@ -77,8 +77,14 @@ Users share **your** OpenAI key. Atlas caps abuse in Redis (fail **closed** if R
 | Ask / day / **whole app** | 200 |
 | Upload / minute / user | 5 |
 | Upload / day / user | 15 |
+| Login / minute / IP | 10 |
+| Login / day / IP | 100 |
+| Signup / minute / IP | 5 |
+| Signup / day / IP | 20 |
+| Demo / minute / IP | 20 |
+| Demo / day / IP | 200 |
 
-Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (won’t run uncapped). Local without Redis: `RATE_LIMIT_ENABLED=false`.
+Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (won’t run uncapped). Local without Redis: `RATE_LIMIT_ENABLED=false`. Auth routes (`/login`, `/signup`, `/demo`) are capped by **client IP** because there is no logged-in user yet.
 
 **Also set a hard spend limit in the OpenAI dashboard** (Settings → Billing / Limits). That is the last stop if something bypasses the app.
 

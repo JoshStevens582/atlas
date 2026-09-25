@@ -60,7 +60,7 @@ async def get_thread(
 
 
 @router.post("/chat/stream")
-async def stream_chat(
+async def forward_ask(
     payload: ChatRequest,
     request: Request,
     rag: Annotated[RagChatService, Depends(get_rag)],
@@ -69,7 +69,7 @@ async def stream_chat(
 ) -> StreamingResponse:
     async def events() -> AsyncIterator[str]:
         try:
-            async for event in rag.stream_answer(
+            async for event in rag.run_ask(
                 payload.message,
                 payload.thread_id,
                 user.username,

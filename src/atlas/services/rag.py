@@ -123,7 +123,7 @@ class RagChatService:
             answer = "I could not generate an answer from the retrieved documents."
         return sources, answer
 
-    async def stream_answer(
+    async def run_ask(
         self,
         question: str,
         thread_id: str | None,
@@ -192,7 +192,7 @@ class RagChatService:
             )
             answer = ""
             used_tools = False
-            async for event in self._stream_with_tools(prompt_messages, trace):
+            async for event in self._call_chat_model(prompt_messages, trace):
                 if event.get("type") == "tool":
                     used_tools = True
                 if event.get("type") == "token":
@@ -235,7 +235,7 @@ class RagChatService:
         title = question if len(question) <= 72 else f"{question[:69]}..."
         return await self.create_thread(owner_id, title)
 
-    async def _stream_with_tools(
+    async def _call_chat_model(
         self,
         prompt_messages: list[EasyInputMessageParam],
         trace: AskTrace,

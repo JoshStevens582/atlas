@@ -29,8 +29,14 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     rate_limit_ask_per_minute: int = 10
     rate_limit_upload_per_minute: int = 5
+    rate_limit_login_per_minute: int = 10
+    rate_limit_signup_per_minute: int = 5
+    rate_limit_demo_per_minute: int = 20
     rate_limit_ask_per_day: int = 40
     rate_limit_upload_per_day: int = 15
+    rate_limit_login_per_day: int = 100
+    rate_limit_signup_per_day: int = 20
+    rate_limit_demo_per_day: int = 200
     rate_limit_ask_global_per_day: int = 200
     answer_cache_enabled: bool = True
     answer_cache_ttl_seconds: int = 60 * 60

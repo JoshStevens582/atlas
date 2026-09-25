@@ -50,7 +50,7 @@ async def enforce_ask_rate_limit(
     request: Request,
     user: Annotated[AuthUser, Depends(require_user)],
 ) -> AuthUser:
-    await _enforce_bucket(request, user, bucket="ask")
+    await _enforce_bucket(request, subject=user.username, bucket="ask")
     return user
 
 
@@ -58,11 +58,29 @@ async def enforce_upload_rate_limit(
     request: Request,
     user: Annotated[AuthUser, Depends(require_user)],
 ) -> AuthUser:
-    await _enforce_bucket(request, user, bucket="upload")
+    await _enforce_bucket(request, subject=user.username, bucket="upload")
     return user
 
 
-async def _enforce_bucket(request: Request, user: AuthUser, *, bucket: str) -> None:
+async def enforce_login_rate_limit(request: Request) -> None:
+    await _enforce_bucket(request, subject=_client_ip(request), bucket="login")
+
+
+async def enforce_signup_rate_limit(request: Request) -> None:
+    await _enforce_bucket(request, subject=_client_ip(request), bucket="signup")
+
+
+async def enforce_demo_rate_limit(request: Request) -> None:
+    await _enforce_bucket(request, subject=_client_ip(request), bucket="demo")
+
+
+def _client_ip(request: Request) -> str:
+    if request.client is not None and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+async def _enforce_bucket(request: Request, *, subject: str, bucket: str) -> None:
     settings = request.app.state.settings
     if not settings.rate_limit_enabled:
         return
@@ -78,7 +96,7 @@ async def _enforce_bucket(request: Request, user: AuthUser, *, bucket: str) -> N
             )
         return
     try:
-        await limiter.hit(username=user.username, bucket=bucket)
+        await limiter.hit(subject=subject, bucket=bucket)
     except RateLimitExceeded as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

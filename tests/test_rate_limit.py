@@ -18,7 +18,7 @@ from atlas.config import Settings
 from atlas.db.models import Base
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.schemas.chat import DocumentOut
-from atlas.services.auth import seed_demo_users
+from atlas.services.auth import issue_access_token, seed_demo_users
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
 from atlas.services.rag import RagChatService
@@ -35,9 +35,9 @@ async def test_rate_limiter_allows_under_limit() -> None:
     )
     redis = FakeRedis(decode_responses=True)
     limiter = RateLimiter(redis, settings)
-    await limiter.hit(username="alice", bucket="ask")
-    await limiter.hit(username="alice", bucket="ask")
-    await limiter.hit(username="alice", bucket="ask")
+    await limiter.hit(subject="alice", bucket="ask")
+    await limiter.hit(subject="alice", bucket="ask")
+    await limiter.hit(subject="alice", bucket="ask")
     await redis.aclose()
 
 
@@ -51,11 +51,11 @@ async def test_rate_limiter_blocks_over_minute_limit() -> None:
     )
     redis = FakeRedis(decode_responses=True)
     limiter = RateLimiter(redis, settings)
-    await limiter.hit(username="alice", bucket="ask")
-    await limiter.hit(username="alice", bucket="ask")
+    await limiter.hit(subject="alice", bucket="ask")
+    await limiter.hit(subject="alice", bucket="ask")
     with pytest.raises(RateLimitExceeded, match="per minute"):
-        await limiter.hit(username="alice", bucket="ask")
-    await limiter.hit(username="bob", bucket="ask")
+        await limiter.hit(subject="alice", bucket="ask")
+    await limiter.hit(subject="bob", bucket="ask")
     await redis.aclose()
 
 
@@ -69,10 +69,10 @@ async def test_rate_limiter_blocks_over_daily_limit() -> None:
     )
     redis = FakeRedis(decode_responses=True)
     limiter = RateLimiter(redis, settings)
-    await limiter.hit(username="alice", bucket="ask")
-    await limiter.hit(username="alice", bucket="ask")
+    await limiter.hit(subject="alice", bucket="ask")
+    await limiter.hit(subject="alice", bucket="ask")
     with pytest.raises(RateLimitExceeded, match="per day"):
-        await limiter.hit(username="alice", bucket="ask")
+        await limiter.hit(subject="alice", bucket="ask")
     await redis.aclose()
 
 
@@ -86,10 +86,10 @@ async def test_rate_limiter_blocks_global_daily_budget() -> None:
     )
     redis = FakeRedis(decode_responses=True)
     limiter = RateLimiter(redis, settings)
-    await limiter.hit(username="alice", bucket="ask")
-    await limiter.hit(username="bob", bucket="ask")
+    await limiter.hit(subject="alice", bucket="ask")
+    await limiter.hit(subject="bob", bucket="ask")
     with pytest.raises(RateLimitExceeded, match="app daily budget"):
-        await limiter.hit(username="alice", bucket="ask")
+        await limiter.hit(subject="alice", bucket="ask")
     await redis.aclose()
 
 
@@ -110,7 +110,7 @@ async def test_rate_limiter_raises_unavailable_on_redis_error() -> None:
     limiter = RateLimiter(redis, settings)
 
     with pytest.raises(RateLimiterUnavailable):
-        await limiter.hit(username="alice", bucket="ask")
+        await limiter.hit(subject="alice", bucket="ask")
 
 
 @pytest.fixture
@@ -134,6 +134,12 @@ async def limited_client() -> AsyncIterator[AsyncClient]:
         rate_limit_ask_global_per_day=100,
         rate_limit_upload_per_minute=1,
         rate_limit_upload_per_day=100,
+        rate_limit_login_per_minute=100,
+        rate_limit_signup_per_minute=100,
+        rate_limit_demo_per_minute=100,
+        rate_limit_login_per_day=100,
+        rate_limit_signup_per_day=100,
+        rate_limit_demo_per_day=100,
         rate_limit_window_seconds=60,
         upload_dir="./data/uploads",
     )
@@ -184,6 +190,11 @@ async def _auth_headers(client: AsyncClient) -> dict[str, str]:
     )
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+def _bearer_for(settings: Settings, username: str = "alice") -> dict[str, str]:
+    token = issue_access_token(settings, username)
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.mark.asyncio
@@ -264,7 +275,7 @@ async def test_ask_returns_503_when_redis_dies_mid_request() -> None:
         transport=ASGITransport(app=app),
         base_url="http://test",
     ) as client:
-        headers = await _auth_headers(client)
+        headers = _bearer_for(settings)
         response = await client.post(
             "/api/chat/stream", headers=headers, json={"message": "hello"}
         )
@@ -309,7 +320,7 @@ async def test_ask_returns_503_when_redis_missing_and_fail_closed() -> None:
         transport=ASGITransport(app=app),
         base_url="http://test",
     ) as client:
-        headers = await _auth_headers(client)
+        headers = _bearer_for(settings)
         response = await client.post(
             "/api/chat/stream",
             headers=headers,
@@ -317,4 +328,156 @@ async def test_ask_returns_503_when_redis_missing_and_fail_closed() -> None:
         )
         assert response.status_code == 503
         assert "Redis" in response.json()["detail"]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_blocks_login_over_minute_limit() -> None:
+    settings = Settings(
+        rate_limit_login_per_minute=2,
+        rate_limit_login_per_day=100,
+        rate_limit_window_seconds=60,
+    )
+    redis = FakeRedis(decode_responses=True)
+    limiter = RateLimiter(redis, settings)
+    await limiter.hit(subject="127.0.0.1", bucket="login")
+    await limiter.hit(subject="127.0.0.1", bucket="login")
+    with pytest.raises(RateLimitExceeded, match="login"):
+        await limiter.hit(subject="127.0.0.1", bucket="login")
+    await limiter.hit(subject="10.0.0.2", bucket="login")
+    await redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_login_returns_429_when_over_limit() -> None:
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    settings = Settings(
+        openai_api_key="sk-test",
+        atlas_auth_secret="rate-test-login-secret",
+        atlas_demo_users="alice:secret-a",
+        rate_limit_enabled=True,
+        rate_limit_fail_closed=True,
+        rate_limit_login_per_minute=2,
+        rate_limit_login_per_day=100,
+        rate_limit_window_seconds=60,
+    )
+    await seed_demo_users(factory, settings)
+    redis = FakeRedis(decode_responses=True)
+    limiter = RateLimiter(redis, settings)
+    app = FastAPI()
+    app.state.settings = settings
+    app.state.session_factory = factory
+    app.state.rate_limiter = limiter
+    app.include_router(auth_router)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        body = {"username": "alice", "password": "secret-a"}
+        first = await client.post("/api/auth/login", json=body)
+        assert first.status_code == 200
+        second = await client.post("/api/auth/login", json=body)
+        assert second.status_code == 200
+        third = await client.post("/api/auth/login", json=body)
+        assert third.status_code == 429
+        assert "login" in third.json()["detail"]
+        assert third.headers.get("retry-after") is not None
+    await redis.aclose()
+    await engine.dispose()
+
+@pytest.mark.asyncio
+async def test_signup_returns_429_when_over_limit() -> None:
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    settings = Settings(
+        openai_api_key="sk-test",
+        atlas_auth_secret="rate-test-signup-secret",
+        atlas_demo_users="alice:secret-a",
+        rate_limit_enabled=True,
+        rate_limit_fail_closed=True,
+        rate_limit_signup_per_minute=1,
+        rate_limit_signup_per_day=100,
+        rate_limit_window_seconds=60,
+    )
+    await seed_demo_users(factory, settings)
+    redis = FakeRedis(decode_responses=True)
+    limiter = RateLimiter(redis, settings)
+    app = FastAPI()
+    app.state.settings = settings
+    app.state.session_factory = factory
+    app.state.rate_limiter = limiter
+    app.include_router(auth_router)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        first = await client.post(
+            "/api/auth/signup",
+            json={"username": "carol", "password": "secret-c-long"},
+        )
+        assert first.status_code == 200
+        second = await client.post(
+            "/api/auth/signup",
+            json={"username": "dave", "password": "secret-d-long"},
+        )
+        assert second.status_code == 429
+        assert "signup" in second.json()["detail"]
+    await redis.aclose()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_demo_returns_429_when_over_limit() -> None:
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    settings = Settings(
+        openai_api_key="sk-test",
+        atlas_auth_secret="rate-test-demo-secret",
+        atlas_demo_users="alice:secret-a",
+        rate_limit_enabled=True,
+        rate_limit_fail_closed=True,
+        rate_limit_demo_per_minute=1,
+        rate_limit_demo_per_day=100,
+        rate_limit_window_seconds=60,
+    )
+    await seed_demo_users(factory, settings)
+    redis = FakeRedis(decode_responses=True)
+    limiter = RateLimiter(redis, settings)
+    app = FastAPI()
+    app.state.settings = settings
+    app.state.session_factory = factory
+    app.state.rate_limiter = limiter
+    app.include_router(auth_router)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        first = await client.post("/api/auth/demo")
+        assert first.status_code == 200
+        second = await client.post("/api/auth/demo")
+        assert second.status_code == 429
+        assert "demo" in second.json()["detail"]
+    await redis.aclose()
     await engine.dispose()
