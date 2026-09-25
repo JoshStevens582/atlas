@@ -47,6 +47,7 @@ export type RetrievedChunk = {
   chunk_index: number;
   text: string;
   distance: number;
+  match?: "vector" | "lexical" | "both";
 };
 
 export type StreamEvent =

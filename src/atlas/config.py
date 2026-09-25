@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     chunk_overlap: int = 150
     retrieve_k: int = 5
     max_distance: float = 0.85
+    hybrid_search_enabled: bool = True
+    hybrid_rrf_k: int = 60
     history_window: int = 12
     max_tool_rounds: int = 3
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

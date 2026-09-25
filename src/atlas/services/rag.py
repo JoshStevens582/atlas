@@ -14,6 +14,7 @@ from atlas.repositories.sql_repo import ThreadRepository
 from atlas.schemas.chat import ChatMessageOut, RetrievedChunk, ThreadDetailOut, ThreadOut
 from atlas.services.answer_cache import AnswerCache
 from atlas.services.embeddings import EmbeddingClient
+from atlas.services.hybrid import bm25_rank, fuse_hybrid
 from atlas.services.observability import AskTrace
 from atlas.services.prompting import (
     DEVELOPER_INSTRUCTIONS,
@@ -92,7 +93,22 @@ class RagChatService:
             query_vector,
             self._settings.retrieve_k,
         )
-        return keep_close_chunks(raw_hits, self._settings.max_distance)
+        vector_hits = keep_close_chunks(raw_hits, self._settings.max_distance)
+        if not self._settings.hybrid_search_enabled:
+            return vector_hits
+        corpus = await _in_thread(self._chunk_store.list_chunks)
+        lexical_hits = await _in_thread(
+            bm25_rank,
+            question,
+            corpus,
+            self._settings.retrieve_k,
+        )
+        return fuse_hybrid(
+            vector_hits,
+            lexical_hits,
+            limit=self._settings.retrieve_k,
+            rrf_k=self._settings.hybrid_rrf_k,
+        )
 
     async def answer_once(self, question: str) -> tuple[list[RetrievedChunk], str]:
         """Retrieve and generate one turn without saving chat history.
