@@ -1,0 +1,97 @@
+from pathlib import Path
+
+import pytest
+from sqlalchemy import text
+
+from atlas.config import Settings
+from atlas.db.session import (
+    create_engine,
+    create_session_factory,
+    init_database,
+    session_iterator,
+)
+
+
+def _settings(database_file: Path) -> Settings:
+    return Settings(database_url=f"sqlite+aiosqlite:///{database_file.as_posix()}")
+
+
+@pytest.mark.asyncio
+async def test_create_engine_makes_the_database_folder_and_sets_sqlite_pragmas(
+    tmp_path: Path,
+) -> None:
+    database_file = tmp_path / "nested" / "folder" / "atlas.db"
+    engine = create_engine(_settings(database_file))
+    try:
+        async with engine.connect() as connection:
+            journal_mode = (await connection.execute(text("PRAGMA journal_mode"))).scalar_one()
+            busy_timeout = (await connection.execute(text("PRAGMA busy_timeout"))).scalar_one()
+    finally:
+        await engine.dispose()
+
+    assert database_file.parent.is_dir()
+    assert journal_mode == "wal"
+    assert busy_timeout == 5000
+
+
+@pytest.mark.asyncio
+async def test_init_database_creates_tables_and_can_run_twice(tmp_path: Path) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        await init_database(engine)
+        await init_database(engine)
+        async with engine.connect() as connection:
+            tables = {
+                row[0]
+                for row in await connection.execute(
+                    text("SELECT name FROM sqlite_master WHERE type = 'table'")
+                )
+            }
+    finally:
+        await engine.dispose()
+
+    assert {"chat_threads", "chat_messages", "users", "indexed_documents"} <= tables
+
+
+@pytest.mark.asyncio
+async def test_init_database_adds_owner_column_to_an_old_threads_table(tmp_path: Path) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "CREATE TABLE chat_threads ("
+                    "id VARCHAR(36) PRIMARY KEY, title VARCHAR(200), created_at DATETIME)"
+                )
+            )
+            await connection.execute(
+                text("INSERT INTO chat_threads (id, title) VALUES ('old-thread', 'Old')")
+            )
+
+        await init_database(engine)
+
+        async with engine.connect() as connection:
+            owner = (
+                await connection.execute(
+                    text("SELECT owner_id FROM chat_threads WHERE id = 'old-thread'")
+                )
+            ).scalar_one()
+    finally:
+        await engine.dispose()
+
+    assert owner == "legacy"
+
+
+@pytest.mark.asyncio
+async def test_session_iterator_yields_a_working_session(tmp_path: Path) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        factory = create_session_factory(engine)
+        answers = [
+            (await session.execute(text("SELECT 1"))).scalar_one()
+            async for session in session_iterator(factory)
+        ]
+    finally:
+        await engine.dispose()
+
+    assert answers == [1]
