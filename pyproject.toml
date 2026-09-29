@@ -45,6 +45,12 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src"]
 
+[tool.coverage.run]
+# SQLAlchemy's async layer runs sync code inside greenlets; without this,
+# coverage cannot see those lines and reports them as untested.
+concurrency = ["greenlet", "thread"]
+branch = true
+
 [tool.ruff]
 target-version = "py312"
 src = ["src", "tests"]
