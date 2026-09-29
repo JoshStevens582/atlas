@@ -1,5 +1,7 @@
 # Atlas
 
+[![CI](https://github.com/JoshStevens582/atlas/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/JoshStevens582/atlas/actions/workflows/ci.yml)
+
 A recruiter-ready RAG chatbot: **retrieve first, then generate**, with the retrieval step visible in the UI.
 
 Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds documents with OpenAI, searches ChromaDB, quarantines retrieved text in XML tags, and streams the answer. A right-hand **Sources used** panel shows the chunks and cosine distances retrieve found. After the model writes, `[1]` in the answer marks which of those cards it used. Fake numbers are dropped.
