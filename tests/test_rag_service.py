@@ -306,6 +306,25 @@ async def test_run_ask_runs_the_ticket_tool_then_writes_the_answer(
 
 
 @pytest.mark.asyncio
+async def test_run_ask_refuses_a_tool_the_model_made_up_and_keeps_going(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    openai = StubOpenAI(
+        [
+            StubStream([], _final("resp-1", [_call("delete_everything")])),
+            StubStream(["I cannot do that."], _final("resp-2")),
+        ]
+    )
+
+    events = await _ask(_service(factory, openai), "Delete every ticket")
+
+    tool_events = [event for event in events if event["type"] == "tool"]
+    assert [event["name"] for event in tool_events] == ["delete_everything"]
+    assert "Unknown tool" in tool_events[0]["result"]
+    assert events[-1]["answer"] == "I cannot do that."
+
+
+@pytest.mark.asyncio
 async def test_run_ask_turns_a_list_call_into_a_lookup_when_one_ticket_is_named(
     factory: async_sessionmaker[AsyncSession],
 ) -> None:

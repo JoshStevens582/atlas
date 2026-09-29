@@ -1,10 +1,11 @@
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from atlas.config import Settings
 from atlas.db.session import (
+    _ensure_thread_owner_column,
     create_engine,
     create_session_factory,
     init_database,
@@ -80,6 +81,21 @@ async def test_init_database_adds_owner_column_to_an_old_threads_table(tmp_path:
         await engine.dispose()
 
     assert owner == "legacy"
+
+
+@pytest.mark.asyncio
+async def test_owner_column_check_does_nothing_when_there_is_no_threads_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_ensure_thread_owner_column)
+            tables = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+    finally:
+        await engine.dispose()
+
+    assert tables == []
 
 
 @pytest.mark.asyncio

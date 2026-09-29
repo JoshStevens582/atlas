@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
+from starlette.requests import Request
 
 from atlas.api.routers.auth import router as auth_router
 from atlas.api.routers.chat import router as chat_router
@@ -123,6 +124,24 @@ async def test_stream_sends_each_event_as_a_data_line_for_the_signed_in_user(
     assert response.headers["content-type"].startswith("text/event-stream")
     assert _events(response.text) == harness.rag.events
     assert harness.rag.calls == [("hi", "t-1", "alice")]
+
+
+@pytest.mark.asyncio
+async def test_stream_stops_sending_when_the_browser_has_gone_away(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def already_gone(_request: Request) -> bool:
+        return True
+
+    monkeypatch.setattr(Request, "is_disconnected", already_gone)
+    harness.rag.events = [{"type": "token", "delta": "nobody is listening"}]
+
+    response = await harness.client.post(
+        "/api/chat/stream", headers=harness.headers, json={"message": "hi"}
+    )
+
+    assert response.status_code == 200
+    assert _events(response.text) == []
 
 
 @pytest.mark.asyncio

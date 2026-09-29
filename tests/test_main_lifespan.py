@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,7 @@ from sqlalchemy import func, select
 from atlas import main
 from atlas.config import InsecureAuthSecretError, Settings
 from atlas.db.models import User
+from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
 from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter
@@ -89,6 +91,28 @@ async def test_startup_with_redis_builds_queue_and_limiter_and_closes_redis_on_s
     async with main.lifespan(main.app):
         assert isinstance(main.app.state.ingest_queue, IngestQueue)
         assert isinstance(main.app.state.rate_limiter, RateLimiter)
+        assert redis.closed is False
+
+    assert redis.closed is True
+
+
+@pytest.mark.asyncio
+async def test_startup_with_key_and_redis_seeds_the_demo_note_and_runs_then_stops_the_worker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seeded: list[bool] = []
+
+    async def fake_seed(_self: IngestService) -> list[Any]:
+        seeded.append(True)
+        return []
+
+    monkeypatch.setattr(IngestService, "seed_sample_docs", fake_seed)
+    redis = ClosableRedis()
+    _use(monkeypatch, _settings(tmp_path, openai_api_key="sk-test"), redis=redis)
+
+    async with main.lifespan(main.app):
+        await asyncio.sleep(0.05)  # let the embedded worker take its first turn
+        assert seeded == [True]
         assert redis.closed is False
 
     assert redis.closed is True
