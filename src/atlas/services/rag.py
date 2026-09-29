@@ -22,6 +22,7 @@ from atlas.services.prompting import (
     build_user_payload,
     keep_close_chunks,
 )
+from atlas.services.rerank import Reranker
 from atlas.services.tools import (
     ATLAS_TOOLS,
     ONLY_ONE_TICKET_TOOL,
@@ -43,6 +44,7 @@ class RagChatService:
         chunk_store: ChromaChunkStore,
         embeddings: EmbeddingClient,
         answer_cache: AnswerCache | None = None,
+        reranker: Reranker | None = None,
     ) -> None:
         self._settings = settings
         self._openai = openai_client
@@ -50,6 +52,7 @@ class RagChatService:
         self._chunk_store = chunk_store
         self._embeddings = embeddings
         self._answer_cache = answer_cache
+        self._reranker = reranker
 
     async def list_threads(self, owner_id: str) -> list[ThreadOut]:
         async with self._session_factory() as session:
@@ -108,11 +111,25 @@ class RagChatService:
             corpus,
             self._settings.retrieve_k,
         )
-        return fuse_hybrid(
+        # Each search keeps up to retrieve_k, so the merge holds up to twice that.
+        # The re-ranker needs the whole pile to choose the best retrieve_k from.
+        merge_limit = (
+            self._settings.retrieve_k * 2
+            if self._reranker is not None
+            else self._settings.retrieve_k
+        )
+        merged = fuse_hybrid(
             vector_hits,
             lexical_hits,
-            limit=self._settings.retrieve_k,
+            limit=merge_limit,
             rrf_k=self._settings.hybrid_rrf_k,
+        )
+        if self._reranker is None:
+            return merged
+        return await self._reranker.rerank(
+            question,
+            merged,
+            self._settings.retrieve_k,
         )
 
     async def answer_once(self, question: str) -> tuple[list[RetrievedChunk], str]:

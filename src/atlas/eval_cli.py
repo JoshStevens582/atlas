@@ -19,6 +19,7 @@ from atlas.services.rag_eval import (
     load_golden_questions,
     run_eval_suite,
 )
+from atlas.services.rerank import LlmReranker
 
 
 def main() -> None:
@@ -59,12 +60,18 @@ async def _async_main(questions_path: Path, docs_dir: Path) -> int:
     embeddings = EmbeddingClient(openai_client, eval_settings.openai_embedding_model)
     chunk_store = ChromaChunkStore(eval_settings.chroma_path)
     ingest = IngestService(eval_settings, session_factory, chunk_store, embeddings)
+    reranker = (
+        LlmReranker(openai_client, eval_settings.rerank_model)
+        if eval_settings.rerank_enabled
+        else None
+    )
     rag = RagChatService(
         eval_settings,
         openai_client,
         session_factory,
         chunk_store,
         embeddings,
+        reranker=reranker,
     )
     try:
         questions = load_golden_questions(questions_path)

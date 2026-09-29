@@ -24,6 +24,7 @@ from atlas.services.ingest_worker import run_worker_loop
 from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter
 from atlas.services.redis_client import connect_redis
+from atlas.services.rerank import LlmReranker
 
 
 def _configure_logging() -> None:
@@ -75,6 +76,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if redis_client is not None and settings.answer_cache_enabled
         else None
     )
+    reranker = (
+        LlmReranker(openai_client, settings.rerank_model)
+        if settings.rerank_enabled
+        else None
+    )
     rag_service = RagChatService(
         settings,
         openai_client,
@@ -82,6 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chunk_store,
         embeddings,
         answer_cache=answer_cache,
+        reranker=reranker,
     )
     ingest_queue = (
         IngestQueue(redis_client, settings)

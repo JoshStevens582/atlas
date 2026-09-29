@@ -22,6 +22,7 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 | Chat DB | SQLite via SQLAlchemy | Threads, messages, document *metadata* only |
 | **Vector DB** | **ChromaDB** (cosine, persistent under `data/chroma`) | Chunk embeddings + nearest-neighbor search |
 | **Hybrid retrieve** | Chroma vectors + **BM25** keywords, fused with RRF | Rare words / ids that cosine can miss |
+| **Re-ranker** | `gpt-4o-mini` reads the question and each merged chunk, keeps the best 5 | Puts the most useful paragraph first; falls back to the merged order if the call fails |
 | Model | OpenAI `gpt-4o-mini` + `text-embedding-3-small` | Streaming Responses API |
 | UI | React + TypeScript | SSE tokens, citations, Sources used panel |
 
@@ -99,9 +100,10 @@ With Redis up, handbook-style Asks cache the finished answer (key = model + inst
 Browser  --POST /api/chat/stream-->  FastAPI
                                       1. embed question
                                       2. query Chroma (vectors) + BM25 (keywords), fuse with RRF
-                                      3. wrap hits in <context>, question in <user_query>
-                                      4. stream tokens from OpenAI as SSE
-                                      5. save the turn in SQLite
+                                      3. re-rank the merged chunks, keep the best 5
+                                      4. wrap hits in <context>, question in <user_query>
+                                      5. stream tokens from OpenAI as SSE
+                                      6. save the turn in SQLite
 ```
 
 Chunking packs short paragraphs, then uses a sliding window (`chunk_size=900`, `overlap=150`) so sentences on a boundary still appear in one chunk.
