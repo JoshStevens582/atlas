@@ -42,9 +42,8 @@ def chunk_document(text: str, chunk_size: int, overlap: int) -> list[str]:
     if not text.strip():
         return []
 
+    # Text with any visible character always yields at least one paragraph.
     paragraphs = [part.strip() for part in text.split("\n\n") if part.strip()]
-    if not paragraphs:
-        return chunk_text(text, chunk_size, overlap)
 
     chunks: list[str] = []
     buffer = ""

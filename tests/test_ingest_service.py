@@ -216,6 +216,20 @@ async def test_reset_corpus_replaces_everything_with_one_demo_note(
 
 
 @pytest.mark.asyncio
+async def test_reset_corpus_works_when_the_upload_folder_does_not_exist_yet(
+    factory: async_sessionmaker[AsyncSession], tmp_path: Path
+) -> None:
+    store = RecordingChunkStore()
+    service = _service(factory, store, tmp_path)
+    (tmp_path / "uploads").rmdir()
+
+    document = await service.reset_corpus_to_demo_note()
+
+    assert document.original_filename == "00-demo-note.md"
+    assert await _document_count(factory) == 1
+
+
+@pytest.mark.asyncio
 async def test_reset_corpus_fails_clearly_when_the_demo_note_is_missing(
     factory: async_sessionmaker[AsyncSession], tmp_path: Path
 ) -> None:
