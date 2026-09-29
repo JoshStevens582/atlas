@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -6,6 +6,15 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
     pass
+
+
+def _utc_now() -> datetime:
+    """Row timestamp with microseconds.
+
+    SQLite's CURRENT_TIMESTAMP only has one-second resolution, so a question and
+    its reply saved in the same second would tie and sort in an undefined order.
+    """
+    return datetime.now(UTC)
 
 
 class ChatThread(Base):
@@ -16,6 +25,7 @@ class ChatThread(Base):
     title: Mapped[str] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=_utc_now,
         server_default=func.now(),
     )
     messages: Mapped[list["ChatMessage"]] = relationship(
@@ -37,6 +47,7 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=_utc_now,
         server_default=func.now(),
     )
     thread: Mapped[ChatThread] = relationship(back_populates="messages")

@@ -5,6 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 INSECURE_DEFAULT_AUTH_SECRET = "dev-only-change-me"
 # RFC 7518 3.2: HS256 keys should be >= the hash output size (32 bytes).
 MIN_AUTH_SECRET_BYTES = 32
+# Not a real key. The OpenAI client refuses to be built with no key at all, which
+# would stop Atlas from starting; with this placeholder it starts, /api/health
+# says openai_configured=false, and Ask answers 503 until a real key is set.
+UNSET_OPENAI_API_KEY_PLACEHOLDER = "openai-api-key-not-set"
 
 
 class InsecureAuthSecretError(RuntimeError):
