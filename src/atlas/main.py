@@ -12,7 +12,11 @@ from atlas.api.routers.auth import router as auth_router
 from atlas.api.routers.chat import router as chat_router
 from atlas.api.routers.documents import router as documents_router
 from atlas.api.routers.health import router as health_router
-from atlas.config import load_settings, require_secure_auth_secret
+from atlas.config import (
+    UNSET_OPENAI_API_KEY_PLACEHOLDER,
+    load_settings,
+    require_secure_auth_secret,
+)
 from atlas.db.session import create_engine, create_session_factory, init_database
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.services.answer_cache import AnswerCache
@@ -56,7 +60,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     session_factory = create_session_factory(engine)
     if settings.atlas_auth_secret:
         await seed_demo_users(session_factory, settings)
-    openai_client = AsyncOpenAI(api_key=settings.openai_api_key or None)
+    openai_client = AsyncOpenAI(
+        api_key=settings.openai_api_key or UNSET_OPENAI_API_KEY_PLACEHOLDER
+    )
     embeddings = EmbeddingClient(openai_client, settings.openai_embedding_model)
     chunk_store = ChromaChunkStore(settings.chroma_path)
     ingest_service = IngestService(settings, session_factory, chunk_store, embeddings)

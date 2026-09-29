@@ -14,7 +14,7 @@ import signal
 
 from openai import AsyncOpenAI
 
-from atlas.config import load_settings
+from atlas.config import UNSET_OPENAI_API_KEY_PLACEHOLDER, load_settings
 from atlas.db.session import create_engine, create_session_factory, init_database
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.services.embeddings import EmbeddingClient
@@ -42,7 +42,9 @@ async def _run() -> None:
     engine = create_engine(settings)
     await init_database(engine)
     session_factory = create_session_factory(engine)
-    openai_client = AsyncOpenAI(api_key=settings.openai_api_key or None)
+    openai_client = AsyncOpenAI(
+        api_key=settings.openai_api_key or UNSET_OPENAI_API_KEY_PLACEHOLDER
+    )
     embeddings = EmbeddingClient(openai_client, settings.openai_embedding_model)
     chunk_store = ChromaChunkStore(settings.chroma_path)
     ingest = IngestService(settings, session_factory, chunk_store, embeddings)

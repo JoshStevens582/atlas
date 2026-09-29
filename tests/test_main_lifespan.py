@@ -40,6 +40,10 @@ def _settings(tmp_path: Path, **overrides: Any) -> Settings:
 def _run_inside_tmp_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # lifespan makes a relative ./data folder
     monkeypatch.chdir(tmp_path)
+    # CI has no OpenAI key in its environment; make local runs match so a keyless
+    # start is really tested (it used to crash on a developer-machine-only key).
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_ADMIN_KEY", raising=False)
 
 
 def _use(monkeypatch: pytest.MonkeyPatch, settings: Settings, redis: ClosableRedis | None) -> None:
