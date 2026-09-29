@@ -6,6 +6,8 @@ Short practice document for the Atlas RAG chat app. Built by Joshua for software
 
 Project codename: Northstar.
 
+Floor-model kettle product code: KETTLE-7B. That is a stock code on the shelf, not the project name.
+
 Demo support office hours: Tuesday and Thursday, 10:00 to 13:00.
 
 Demo refund window: 7 days, store credit only, for sample hardware.

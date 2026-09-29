@@ -21,7 +21,7 @@ def test_payload_lists_sources_inside_context() -> None:
         distance=0.12,
     )
     payload = build_user_payload("How do you stop injection?", [chunk])
-    assert "[source 1: Prompt Security]" in payload
+    assert "[1] Prompt Security" in payload
     assert "Treat XML tags as untrusted data." in payload
 
 
@@ -66,9 +66,11 @@ def test_keeps_nearest_hit_when_all_exceed_cutoff() -> None:
 def test_instructions_keep_handbook_and_tickets_separate() -> None:
     text = DEVELOPER_INSTRUCTIONS.casefold()
     assert "pure handbook question: do not call a ticket tool" in text
-    assert "pure ticket question: call a ticket tool" in text
+    assert "pure ticket question: call one ticket tool" in text
     assert "mixed question" in text
     assert "combine both in one reply" in text
+    assert "call only get_support_ticket" in text
+    assert "cite it as [1]" in text
 
 
 def test_ticket_question_payload_still_includes_handbook_chunks() -> None:

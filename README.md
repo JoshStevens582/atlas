@@ -2,7 +2,7 @@
 
 A recruiter-ready RAG chatbot: **retrieve first, then generate**, with the retrieval step visible in the UI.
 
-Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds documents with OpenAI, searches ChromaDB, quarantines retrieved text in XML tags, and streams the answer. A right-hand **Sources used** panel shows the chunks and cosine distances used for the latest reply.
+Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds documents with OpenAI, searches ChromaDB, quarantines retrieved text in XML tags, and streams the answer. A right-hand **Sources used** panel shows the chunks and cosine distances retrieve found. After the model writes, `[1]` in the answer marks which of those cards it used. Fake numbers are dropped.
 
 **Repo:** [github.com/JoshStevens582/atlas](https://github.com/JoshStevens582/atlas)
 
@@ -21,6 +21,8 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 | API | FastAPI, async | Router → service → repository |
 | Chat DB | SQLite via SQLAlchemy | Threads, messages, document *metadata* only |
 | **Vector DB** | **ChromaDB** (cosine, persistent under `data/chroma`) | Chunk embeddings + nearest-neighbor search |
+| **Hybrid retrieve** | Chroma vectors + **BM25** keywords, fused with RRF | Rare words / ids that cosine can miss |
+| **Re-ranker** | `gpt-4o-mini` reads the question and each merged chunk, keeps the best 5 | Puts the most useful paragraph first; falls back to the merged order if the call fails |
 | Model | OpenAI `gpt-4o-mini` + `text-embedding-3-small` | Streaming Responses API |
 | UI | React + TypeScript | SSE tokens, citations, Sources used panel |
 
@@ -85,8 +87,14 @@ Users share **your** OpenAI key. Atlas caps abuse in Redis (fail **closed** if R
 | Ask / day / **whole app** | 200 |
 | Upload / minute / user | 5 |
 | Upload / day / user | 15 |
+| Login / minute / IP | 10 |
+| Login / day / IP | 100 |
+| Signup / minute / IP | 5 |
+| Signup / day / IP | 20 |
+| Demo / minute / IP | 20 |
+| Demo / day / IP | 200 |
 
-Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (won’t run uncapped). Local without Redis: `RATE_LIMIT_ENABLED=false`.
+Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (won’t run uncapped). Local without Redis: `RATE_LIMIT_ENABLED=false`. Auth routes (`/login`, `/signup`, `/demo`) are capped by **client IP** because there is no logged-in user yet.
 
 **Also set a hard spend limit in the OpenAI dashboard** (Settings → Billing / Limits). That is the last stop if something bypasses the app.
 
@@ -99,10 +107,11 @@ With Redis up, handbook-style Asks cache the finished answer (key = model + inst
 ```text
 Browser  --POST /api/chat/stream-->  FastAPI
                                       1. embed question
-                                      2. query Chroma (top-k, distance cutoff)
-                                      3. wrap hits in <context>, question in <user_query>
-                                      4. stream tokens from OpenAI as SSE
-                                      5. save the turn in SQLite
+                                      2. query Chroma (vectors) + BM25 (keywords), fuse with RRF
+                                      3. re-rank the merged chunks, keep the best 5
+                                      4. wrap hits in <context>, question in <user_query>
+                                      5. stream tokens from OpenAI as SSE
+                                      6. save the turn in SQLite
 ```
 
 Chunking packs short paragraphs, then uses a sliding window (`chunk_size=900`, `overlap=150`) so sentences on a boundary still appear in one chunk.

@@ -13,16 +13,23 @@ from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.repositories.sql_repo import ThreadRepository
 from atlas.schemas.chat import ChatMessageOut, RetrievedChunk, ThreadDetailOut, ThreadOut
 from atlas.services.answer_cache import AnswerCache
+from atlas.services.citations import assign_cite_numbers, mark_cited_chunks
 from atlas.services.embeddings import EmbeddingClient
+from atlas.services.hybrid import bm25_rank, fuse_hybrid
 from atlas.services.observability import AskTrace
 from atlas.services.prompting import (
     DEVELOPER_INSTRUCTIONS,
     build_user_payload,
     keep_close_chunks,
 )
+from atlas.services.rerank import Reranker
 from atlas.services.tools import (
     ATLAS_TOOLS,
+    ONLY_ONE_TICKET_TOOL,
+    is_ticket_tool,
+    order_tool_calls,
     parse_tool_arguments,
+    resolve_ticket_call,
     run_allowlisted_tool,
 )
 
@@ -37,6 +44,7 @@ class RagChatService:
         chunk_store: ChromaChunkStore,
         embeddings: EmbeddingClient,
         answer_cache: AnswerCache | None = None,
+        reranker: Reranker | None = None,
     ) -> None:
         self._settings = settings
         self._openai = openai_client
@@ -44,6 +52,7 @@ class RagChatService:
         self._chunk_store = chunk_store
         self._embeddings = embeddings
         self._answer_cache = answer_cache
+        self._reranker = reranker
 
     async def list_threads(self, owner_id: str) -> list[ThreadOut]:
         async with self._session_factory() as session:
@@ -92,7 +101,36 @@ class RagChatService:
             query_vector,
             self._settings.retrieve_k,
         )
-        return keep_close_chunks(raw_hits, self._settings.max_distance)
+        vector_hits = keep_close_chunks(raw_hits, self._settings.max_distance)
+        if not self._settings.hybrid_search_enabled:
+            return vector_hits
+        corpus = await _in_thread(self._chunk_store.list_chunks)
+        lexical_hits = await _in_thread(
+            bm25_rank,
+            question,
+            corpus,
+            self._settings.retrieve_k,
+        )
+        # Each search keeps up to retrieve_k, so the merge holds up to twice that.
+        # The re-ranker needs the whole pile to choose the best retrieve_k from.
+        merge_limit = (
+            self._settings.retrieve_k * 2
+            if self._reranker is not None
+            else self._settings.retrieve_k
+        )
+        merged = fuse_hybrid(
+            vector_hits,
+            lexical_hits,
+            limit=merge_limit,
+            rrf_k=self._settings.hybrid_rrf_k,
+        )
+        if self._reranker is None:
+            return merged
+        return await self._reranker.rerank(
+            question,
+            merged,
+            self._settings.retrieve_k,
+        )
 
     async def answer_once(self, question: str) -> tuple[list[RetrievedChunk], str]:
         """Retrieve and generate one turn without saving chat history.
@@ -103,7 +141,7 @@ class RagChatService:
         if not cleaned:
             raise ValueError("Message cannot be empty.")
 
-        sources = await self.retrieve(cleaned)
+        sources = assign_cite_numbers(await self.retrieve(cleaned))
         response = await self._openai.responses.create(
             model=self._settings.openai_chat_model,
             instructions=DEVELOPER_INSTRUCTIONS,
@@ -121,9 +159,9 @@ class RagChatService:
         answer = response.output_text.strip()
         if not answer:
             answer = "I could not generate an answer from the retrieved documents."
-        return sources, answer
+        return mark_cited_chunks(sources, answer), answer
 
-    async def stream_answer(
+    async def run_ask(
         self,
         question: str,
         thread_id: str | None,
@@ -146,7 +184,7 @@ class RagChatService:
                 )
                 await repo.add_message(thread.id, "user", cleaned)
 
-            sources = await self.retrieve(cleaned)
+            sources = assign_cite_numbers(await self.retrieve(cleaned))
             trace.record_retrieve(sources)
             yield {"type": "thread", "thread": thread.model_dump()}
             yield {
@@ -174,6 +212,11 @@ class RagChatService:
                 cached = await self._answer_cache.get(cache_key)
                 if cached is not None:
                     answer = str(cached["answer"]).strip()
+                    sources = mark_cited_chunks(sources, answer)
+                    yield {
+                        "type": "sources",
+                        "sources": [chunk.model_dump() for chunk in sources],
+                    }
                     yield {"type": "token", "text": answer}
                     async with self._session_factory() as session:
                         await ThreadRepository(session).add_message(
@@ -192,7 +235,11 @@ class RagChatService:
             )
             answer = ""
             used_tools = False
-            async for event in self._stream_with_tools(prompt_messages, trace):
+            async for event in self._call_chat_model(
+                prompt_messages,
+                trace,
+                cleaned,
+            ):
                 if event.get("type") == "tool":
                     used_tools = True
                 if event.get("type") == "token":
@@ -202,6 +249,12 @@ class RagChatService:
             if not answer:
                 answer = "I could not generate an answer from the retrieved documents."
                 yield {"type": "token", "text": answer}
+
+            sources = mark_cited_chunks(sources, answer)
+            yield {
+                "type": "sources",
+                "sources": [chunk.model_dump() for chunk in sources],
+            }
 
             if (
                 cache_key is not None
@@ -235,16 +288,18 @@ class RagChatService:
         title = question if len(question) <= 72 else f"{question[:69]}..."
         return await self.create_thread(owner_id, title)
 
-    async def _stream_with_tools(
+    async def _call_chat_model(
         self,
         prompt_messages: list[EasyInputMessageParam],
         trace: AskTrace,
+        question: str,
     ) -> AsyncIterator[dict[str, Any]]:
         previous_response_id: str | None = None
         tool_outputs: list[dict[str, str]] = []
         max_rounds = self._settings.max_tool_rounds
         if max_rounds < 1:
             max_rounds = 1
+        used_ticket_tool = False
 
         for _round in range(max_rounds + 1):
             text_parts, response = await self._complete_model_round(
@@ -261,18 +316,24 @@ class RagChatService:
                 return
 
             tool_outputs = []
-            for call in function_calls:
+            for call in order_tool_calls(function_calls):
                 name = str(getattr(call, "name", "") or "")
                 arguments = str(getattr(call, "arguments", "") or "{}")
+                name, arguments = resolve_ticket_call(name, arguments, question)
                 call_id = str(getattr(call, "call_id", "") or "")
-                result = run_allowlisted_tool(name, arguments)
-                trace.record_tool(name)
-                yield {
-                    "type": "tool",
-                    "name": name,
-                    "arguments": parse_tool_arguments(arguments),
-                    "result": result,
-                }
+                if is_ticket_tool(name) and used_ticket_tool:
+                    result = ONLY_ONE_TICKET_TOOL
+                else:
+                    result = run_allowlisted_tool(name, arguments)
+                    if is_ticket_tool(name):
+                        used_ticket_tool = True
+                    trace.record_tool(name)
+                    yield {
+                        "type": "tool",
+                        "name": name,
+                        "arguments": parse_tool_arguments(arguments),
+                        "result": result,
+                    }
                 tool_outputs.append(
                     {
                         "type": "function_call_output",

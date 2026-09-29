@@ -1,5 +1,12 @@
-from fastapi import APIRouter, HTTPException, Request, status
+from typing import Annotated
 
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from atlas.api.deps import (
+    enforce_demo_rate_limit,
+    enforce_login_rate_limit,
+    enforce_signup_rate_limit,
+)
 from atlas.schemas.auth import LoginRequest, SignupRequest, TokenOut
 from atlas.services.auth import AuthError, authenticate_user, issue_access_token, signup_user
 
@@ -15,7 +22,11 @@ def _require_auth_secret(request: Request) -> None:
 
 
 @router.post("/signup", response_model=TokenOut)
-async def signup(payload: SignupRequest, request: Request) -> TokenOut:
+async def signup(
+    payload: SignupRequest,
+    request: Request,
+    _: Annotated[None, Depends(enforce_signup_rate_limit)],
+) -> TokenOut:
     """Anyone can create a real account: password is bcrypt-hashed and
     stored, never kept or logged in plaintext."""
     _require_auth_secret(request)
@@ -30,7 +41,11 @@ async def signup(payload: SignupRequest, request: Request) -> TokenOut:
 
 
 @router.post("/login", response_model=TokenOut)
-async def login(payload: LoginRequest, request: Request) -> TokenOut:
+async def login(
+    payload: LoginRequest,
+    request: Request,
+    _: Annotated[None, Depends(enforce_login_rate_limit)],
+) -> TokenOut:
     _require_auth_secret(request)
     settings = request.app.state.settings
     username = await authenticate_user(
@@ -45,7 +60,10 @@ async def login(payload: LoginRequest, request: Request) -> TokenOut:
 
 
 @router.post("/demo", response_model=TokenOut)
-async def demo_login(request: Request) -> TokenOut:
+async def demo_login(
+    request: Request,
+    _: Annotated[None, Depends(enforce_demo_rate_limit)],
+) -> TokenOut:
     """One-click path for anyone just looking at the app (recruiters,
     reviewers): logs in as the first seeded demo account with no typing.
     Goes through the exact same authenticate_user() as a real login —
