@@ -6,6 +6,8 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 
 **Repo:** [github.com/JoshStevens582/atlas](https://github.com/JoshStevens582/atlas)
 
+![Atlas answering "What is the project codename?" with the answer "Northstar [1]" and the matching passage in the Sources used panel](docs/atlas-screenshot.png)
+
 ## Demo script (2 minutes)
 
 The Library starts with one file, **Demo Note** (`sample_docs/00-demo-note.md`).
