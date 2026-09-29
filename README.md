@@ -8,11 +8,14 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 
 ## Demo script (2 minutes)
 
-1. Open the app and click **How does Atlas retrieve answers?**
-2. Point at **Sources used**: those passages were searched *before* the model wrote a word.
-3. Ask **What is the refund policy?** The vendor memo tries to jailbreak the model. Atlas should stay on the 14-day store-credit rule.
-4. Ask **Where is support ticket T-104?** That status is not in the handbook. The model should call `get_support_ticket`; Atlas runs it; **Sources used** shows the tool result.
-5. Upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer.
+The Library starts with one file, **Demo Note** (`sample_docs/00-demo-note.md`).
+
+1. Click **Continue as demo user**, then click **What is the project codename?**
+2. The answer is **Northstar**, with `[1]` in the sentence. Point at **Sources used**: that passage was found *before* the model wrote a word. The card says which passage `[1]` is, and `in answer` marks that the model used it.
+3. Ask **What is KETTLE-7B?** It is the floor-model kettle stock code, not the project name.
+4. Click **List all support tickets**. Tickets are not in the handbook. The model calls `list_support_tickets`, Atlas runs it, and a tool card shows T-104, T-201, and T-330.
+5. Ask **Where is support ticket T-104?** The model calls `get_support_ticket` for that one id. The tool card shows it is in transit.
+6. Upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer. With a longer file, the cards are labelled `vector`, `lexical`, or `both`, and the re-ranker puts the most useful passage first.
 
 ## Stack
 
@@ -53,7 +56,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look (no signup), sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or create your own account — signup is real: passwords are bcrypt-hashed and stored in SQLite, not a hardcoded list. Threads are per user. Sample handbook files in `sample_docs/` are indexed on first start.
+Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look (no signup), sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or create your own account — signup is real: passwords are bcrypt-hashed and stored in SQLite, not a hardcoded list. Threads are per user. On first start only Demo Note is indexed. The other files in `sample_docs/` are used by the golden-set eval.
 
 ### Redis (Library upload queue)
 
@@ -100,7 +103,7 @@ Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (wo
 
 ### Ask answer cache
 
-With Redis up, handbook-style Asks cache the finished answer (key = model + instructions + question + retrieved chunks + history). Same Ask again with the same retrieve context → skip the **generate** OpenAI call (retrieve still runs). Ticket/tool Asks are not cached. TTL default 1 hour (`ANSWER_CACHE_TTL_SECONDS`).
+With Redis up, handbook-style Asks cache the finished answer (key = model + instructions + question + retrieved chunks + history). Same Ask again with the same retrieve context → skip the **generate** OpenAI call (retrieve and re-rank still run). Ticket/tool Asks are not cached. TTL default 1 hour (`ANSWER_CACHE_TTL_SECONDS`).
 
 ## Architecture
 
