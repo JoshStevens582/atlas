@@ -132,3 +132,7 @@ Golden-set RAG eval (needs `OPENAI_API_KEY`; writes to `data/eval/` so it does n
 ```powershell
 uv run python -m atlas.eval_cli
 ```
+
+## License
+
+[MIT](LICENSE)
