@@ -47,9 +47,16 @@ def test_load_shipped_golden_questions() -> None:
     questions = load_golden_questions(Path("evals/questions.json"))
     assert len(questions) >= 10
     question_ids = [item.id for item in questions]
-    assert "northstar" in question_ids
-    assert "refund-jailbreak" in question_ids
-    assert "unknown-ceo-salary" in question_ids
+    assert "annual-carryover" in question_ids
+    assert "security-incident-deadline" in question_ids
+    assert "unknown-dress-code" in question_ids
+    handbook_titles = {
+        path.read_text(encoding="utf-8").splitlines()[0]
+        for path in Path("handbook").glob("*.md")
+    }
+    for item in questions:
+        for fragment in item.source_title_contains:
+            assert any(fragment.lower() in title.lower() for title in handbook_titles), item.id
 
 
 def test_load_rejects_missing_file(tmp_path: Path) -> None:

@@ -24,7 +24,7 @@ from atlas.services.rerank import LlmReranker
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run Atlas golden-set RAG evals against sample_docs."
+        description="Run Atlas golden-set RAG evals against the handbook."
     )
     parser.add_argument(
         "--questions",
@@ -35,8 +35,8 @@ def main() -> None:
     parser.add_argument(
         "--docs",
         type=Path,
-        default=Path("sample_docs"),
-        help="Directory to index for this run (default: sample_docs)",
+        default=Path("handbook"),
+        help="Directory to index for this run (default: handbook)",
     )
     args = parser.parse_args()
     raise SystemExit(asyncio.run(_async_main(args.questions, args.docs)))

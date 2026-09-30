@@ -159,7 +159,11 @@ class IngestService:
         ]
 
     async def reset_and_ingest_paths(self, paths: Sequence[Path]) -> list[DocumentOut]:
-        """Wipe the index and ingest the given files. Used by the eval runner."""
+        """Wipe the index and ingest the given files. Used by the eval runner.
+
+        Files are titled and indexed the way the library is, so the eval scores
+        what the Library serves. The self-test is skipped: the eval is the test.
+        """
         if not paths:
             raise IngestError("No documents were provided to index.")
         async with self._session_factory() as session:
@@ -167,7 +171,7 @@ class IngestService:
         await asyncio.to_thread(self._chunk_store.reset)
         indexed: list[DocumentOut] = []
         for path in paths:
-            indexed.append(await self.ingest_path(path))
+            indexed.append(await self._ingest_library_file(path, run_retrieval_check=False))
         return indexed
 
     async def delete_document(self, document_id: str) -> bool:
