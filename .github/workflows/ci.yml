@@ -50,3 +50,40 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+  docker:
+    # Builds both images and starts the whole stack (web -> api -> redis) on a
+    # real Linux runner, then pokes it through the front door. This is how the
+    # Docker files are tested: Docker is not installed on the dev machine.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write a throwaway .env (no OpenAI key needed to start)
+        run: |
+          echo "ATLAS_AUTH_SECRET=$(openssl rand -hex 32)" > .env
+
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait --wait-timeout 180
+
+      - name: Health check through the web proxy
+        run: curl -fsS http://localhost/api/health
+
+      - name: React app is served
+        run: curl -fsS http://localhost/ | grep -q 'id="root"'
+
+      - name: Unknown page falls back to the React app
+        run: curl -fsS http://localhost/some/client/route | grep -q 'id="root"'
+
+      - name: Demo login and an authenticated call (proxy, api, redis, database)
+        run: |
+          token=$(curl -fsS -X POST http://localhost/api/auth/demo | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+          curl -fsS -H "Authorization: Bearer $token" http://localhost/api/threads
+
+      - name: Show logs if anything failed
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v

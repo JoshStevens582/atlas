@@ -1,0 +1,23 @@
+# SITE_ADDRESS decides everything:
+#   :80                   plain HTTP (local Docker, CI). This is the default.
+#   atlas.example.com     Caddy fetches and renews a free HTTPS certificate and
+#                         redirects HTTP to HTTPS. Needs DNS pointing at this
+#                         server and ports 80 and 443 open.
+{$SITE_ADDRESS::80} {
+	# API: one front door. flush_interval -1 sends each streamed token to the
+	# browser immediately instead of buffering the answer.
+	handle /api/* {
+		reverse_proxy api:8787 {
+			flush_interval -1
+		}
+	}
+
+	# Everything else is the built React app. Unknown paths fall back to
+	# index.html so the single-page app can handle them.
+	handle {
+		root * /srv
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+}
