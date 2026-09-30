@@ -28,6 +28,18 @@ def title_from_path(path: Path) -> str:
     return path.stem.replace("-", " ").replace("_", " ").strip().title()
 
 
+def title_from_text(text: str, fallback: str) -> str:
+    """The text of a leading ``# Heading`` line, or ``fallback`` if the file has none."""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("# ") and stripped[2:].strip():
+            return stripped[2:].strip()
+        break
+    return fallback
+
+
 def _extract_pdf(path: Path) -> str:
     try:
         reader = PdfReader(str(path))

@@ -63,27 +63,32 @@ def test_keeps_nearest_hit_when_all_exceed_cutoff() -> None:
     assert kept == [nearer]
 
 
-def test_instructions_keep_handbook_and_tickets_separate() -> None:
+def test_instructions_keep_handbook_text_and_calculations_separate() -> None:
     text = DEVELOPER_INSTRUCTIONS.casefold()
-    assert "pure handbook question: do not call a ticket tool" in text
-    assert "pure ticket question: call one ticket tool" in text
+    assert "estimate_annual_leave" in text
+    assert "get_federal_holidays" in text
+    assert "pure handbook question: do not call a tool" in text
     assert "mixed question" in text
     assert "combine both in one reply" in text
-    assert "call only get_support_ticket" in text
+    assert "ask the user for it instead of guessing" in text
     assert "cite it as [1]" in text
 
 
-def test_ticket_question_payload_still_includes_handbook_chunks() -> None:
+def test_instructions_no_longer_mention_tickets() -> None:
+    assert "ticket" not in DEVELOPER_INSTRUCTIONS.casefold()
+
+
+def test_a_calculation_question_payload_still_includes_handbook_chunks() -> None:
     chunk = RetrievedChunk(
         document_id="doc-1",
-        document_title="Vendor Refund Memo",
+        document_title="Leave types",
         chunk_index=0,
-        text="Official refund window: 14 days from delivery.",
+        text="You can carry over a maximum of 240 annual leave hours.",
         distance=0.2,
     )
     payload = build_user_payload(
-        "Does ticket T-104 get a refund under the 14-day rule?",
+        "I have 182 hours and 25 pay periods left. How many would I lose?",
         [chunk],
     )
-    assert "14 days from delivery" in payload
-    assert "Does ticket T-104 get a refund under the 14-day rule?" in payload
+    assert "maximum of 240 annual leave hours" in payload
+    assert "I have 182 hours and 25 pay periods left." in payload

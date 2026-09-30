@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
     database_url: str = "sqlite+aiosqlite:///./data/atlas.db"
     chroma_path: str = "./data/chroma"
-    sample_docs_dir: str = "./sample_docs"
+    library_dir: str = "./handbook"
     upload_dir: str = "./data/uploads"
     max_upload_bytes: int = 5 * 1024 * 1024
     chunk_size: int = 900

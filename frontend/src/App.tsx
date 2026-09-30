@@ -41,16 +41,16 @@ function displayTitle(title: string): string {
 
 const SUGGESTIONS = [
   {
-    title: "What is the project codename?",
-    detail: "Demo Note — answer should be Northstar.",
+    title: "How many annual leave hours can I carry over?",
+    detail: "Handbook text. Answer is cited from the Leave page.",
   },
   {
-    title: "What are the demo support office hours?",
-    detail: "Demo Note — Tuesday and Thursday, 10:00 to 13:00.",
+    title: "I have 182 annual leave hours, 5 years of service and 25 pay periods left. How many hours would I lose?",
+    detail: "A calculation. Calls the estimate_annual_leave tool, then cites the carry-over rule.",
   },
   {
-    title: "List all support tickets",
-    detail: "Not in the handbook — should call list_support_tickets.",
+    title: "Which day is Independence Day observed in 2026?",
+    detail: "A date. Calls the get_federal_holidays tool.",
   },
 ];
 
@@ -410,7 +410,7 @@ export default function App() {
       <main className="panel chat">
         <header className="chat-header">
           <h1>{selectedTitle}</h1>
-          <p>Retrieve from the handbook. Tools for live tickets. Sources used shows both.</p>
+          <p>Ask the TTS Handbook (US government, public domain). Two tools do the leave and holiday calculations. Sources used shows both.</p>
           <div className="pipeline">
             <div className={`step ${stage === "search" ? "active" : ""}`}>
               <b>1 · Retrieve</b>
@@ -508,7 +508,7 @@ export default function App() {
           ))}
           {sources.length === 0 && toolCalls.length === 0 ? (
             <p style={{ color: "var(--muted)" }}>
-              Ask a handbook question or ticket T-104. Hits and tool results land here.
+              Ask a handbook question or a leave or holiday calculation. Hits and tool results land here.
             </p>
           ) : (
             sources.map((chunk, index) => {

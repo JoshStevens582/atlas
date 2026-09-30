@@ -87,17 +87,19 @@ def _service(
     store: RecordingChunkStore,
     tmp_path: Path,
     *,
-    with_demo_note: bool = True,
+    with_library: bool = True,
     embeddings: FakeEmbeddings | None = None,
     retrieval_check: StubSelfTest | None = None,
 ) -> IngestService:
-    sample_docs = tmp_path / "sample_docs"
-    sample_docs.mkdir()
-    if with_demo_note:
-        (sample_docs / "00-demo-note.md").write_text(DEMO_TEXT, encoding="utf-8")
+    library = tmp_path / "handbook"
+    library.mkdir()
+    if with_library:
+        (library / "b-travel.md").write_text("Book flights early.\n", encoding="utf-8")
+        (library / "a-leave.md").write_text(DEMO_TEXT, encoding="utf-8")
+        (library / "notes.csv").write_text("not,a,document\n", encoding="utf-8")
     uploads = tmp_path / "uploads"
     uploads.mkdir()
-    settings = Settings(sample_docs_dir=str(sample_docs), upload_dir=str(uploads))
+    settings = Settings(library_dir=str(library), upload_dir=str(uploads))
     return IngestService(
         settings,
         factory,
@@ -247,75 +249,90 @@ async def test_ingest_path_reads_the_file_and_keeps_its_name(
 
 
 @pytest.mark.asyncio
-async def test_seed_sample_docs_indexes_the_demo_note_once(
+async def test_seed_library_indexes_every_page_once_named_for_its_heading(
     factory: async_sessionmaker[AsyncSession], tmp_path: Path
 ) -> None:
     store = RecordingChunkStore()
-    service = _service(factory, store, tmp_path)
+    selftest = StubSelfTest(RetrievalCheckOut(hits=1, total=1))
+    service = _service(factory, store, tmp_path, retrieval_check=selftest)
 
-    first = await service.seed_sample_docs()
-    second = await service.seed_sample_docs()
+    first = await service.seed_library()
+    second = await service.seed_library()
 
-    assert [document.original_filename for document in first] == ["00-demo-note.md"]
+    assert [(doc.original_filename, doc.title) for doc in first] == [
+        ("a-leave.md", "Demo Note"),
+        ("b-travel.md", "B Travel"),
+    ]
     assert second == []
-    assert len(store.upserts) == 1
+    assert len(store.upserts) == 2
+    assert selftest.document_ids == []
+    assert all(doc.retrieval_check is None for doc in first)
 
 
 @pytest.mark.asyncio
-async def test_seed_sample_docs_does_nothing_when_the_demo_note_is_missing(
+async def test_seed_library_does_nothing_when_the_library_folder_is_empty_or_missing(
     factory: async_sessionmaker[AsyncSession], tmp_path: Path
 ) -> None:
     store = RecordingChunkStore()
+    empty = _service(factory, store, tmp_path, with_library=False)
 
-    seeded = await _service(factory, store, tmp_path, with_demo_note=False).seed_sample_docs()
+    assert await empty.seed_library() == []
 
-    assert seeded == []
+    (tmp_path / "handbook").rmdir()
+    assert await empty.seed_library() == []
     assert store.upserts == []
 
 
 @pytest.mark.asyncio
-async def test_reset_corpus_replaces_everything_with_one_demo_note(
+async def test_reset_library_replaces_everything_and_scores_every_page(
     factory: async_sessionmaker[AsyncSession], tmp_path: Path
 ) -> None:
     store = RecordingChunkStore()
-    service = _service(factory, store, tmp_path)
+    selftest = StubSelfTest(RetrievalCheckOut(hits=2, total=3))
+    service = _service(factory, store, tmp_path, retrieval_check=selftest)
     await service.ingest_text("Old upload", title="Old", original_filename="old.txt")
     upload_dir = tmp_path / "uploads"
     (upload_dir / "old.txt").write_text("Old upload", encoding="utf-8")
     (upload_dir / "keep-folder").mkdir()
 
-    document = await service.reset_corpus_to_demo_note()
+    documents = await service.reset_library()
 
-    assert document.original_filename == "00-demo-note.md"
-    assert await _document_count(factory) == 1
+    assert [doc.original_filename for doc in documents] == ["a-leave.md", "b-travel.md"]
+    assert await _document_count(factory) == 2
     assert store.reset_calls == 1
+    assert len(selftest.document_ids) == 3  # the old upload was scored too, before the reset
+    assert [doc.retrieval_check for doc in documents] == [RetrievalCheckOut(hits=2, total=3)] * 2
     assert not (upload_dir / "old.txt").exists()
     assert (upload_dir / "keep-folder").is_dir()
 
 
 @pytest.mark.asyncio
-async def test_reset_corpus_works_when_the_upload_folder_does_not_exist_yet(
+async def test_reset_library_works_when_the_upload_folder_does_not_exist_yet(
     factory: async_sessionmaker[AsyncSession], tmp_path: Path
 ) -> None:
     store = RecordingChunkStore()
     service = _service(factory, store, tmp_path)
     (tmp_path / "uploads").rmdir()
 
-    document = await service.reset_corpus_to_demo_note()
+    documents = await service.reset_library()
 
-    assert document.original_filename == "00-demo-note.md"
-    assert await _document_count(factory) == 1
+    assert len(documents) == 2
+    assert await _document_count(factory) == 2
 
 
 @pytest.mark.asyncio
-async def test_reset_corpus_fails_clearly_when_the_demo_note_is_missing(
+async def test_reset_library_refuses_to_wipe_when_the_library_is_missing(
     factory: async_sessionmaker[AsyncSession], tmp_path: Path
 ) -> None:
     store = RecordingChunkStore()
-    service = _service(factory, store, tmp_path, with_demo_note=False)
+    service = _service(factory, store, tmp_path, with_library=False)
+    await service.ingest_text("Keep me", title="Keep", original_filename="keep.txt")
 
-    with pytest.raises(IngestError, match="00-demo-note.md is missing"):
-        await service.reset_corpus_to_demo_note()
+    with pytest.raises(IngestError, match="No library documents"):
+        await service.reset_library()
+
+    assert store.reset_calls == 0
+    assert await _document_count(factory) == 1
 
 
 @pytest.mark.asyncio

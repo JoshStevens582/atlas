@@ -106,7 +106,7 @@ async def test_startup_with_key_and_redis_seeds_the_demo_note_and_runs_then_stop
         seeded.append(True)
         return []
 
-    monkeypatch.setattr(IngestService, "seed_sample_docs", fake_seed)
+    monkeypatch.setattr(IngestService, "seed_library", fake_seed)
     redis = ClosableRedis()
     _use(monkeypatch, _settings(tmp_path, openai_api_key="sk-test"), redis=redis)
 

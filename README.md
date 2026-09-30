@@ -13,14 +13,13 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 
 ## Demo script (2 minutes)
 
-The Library starts with one file, **Demo Note** (`sample_docs/00-demo-note.md`).
+The Library is 21 pages of the **TTS Handbook** (leave, overtime, travel, work schedules, security and more), the real employee handbook of a US government digital team. It is public domain, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Each page shows a `Self-test: n/n found` score.
 
-1. Click **Continue as demo user**, then click **What is the project codename?**
-2. The answer is **Northstar**, with `[1]` in the sentence. Point at **Sources used**: that passage was found *before* the model wrote a word. The card says which passage `[1]` is, and `in answer` marks that the model used it.
-3. Ask **What is KETTLE-7B?** It is the floor-model kettle stock code, not the project name.
-4. Click **List all support tickets**. Tickets are not in the handbook. The model calls `list_support_tickets`, Atlas runs it, and a tool card shows T-104, T-201, and T-330.
-5. Ask **Where is support ticket T-104?** The model calls `get_support_ticket` for that one id. The tool card shows it is in transit.
-6. Upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer. With a longer file, the cards are labelled `vector`, `lexical`, or `both`, and the re-ranker puts the most useful passage first.
+1. Click **Continue as demo user**, then click **How many annual leave hours can I carry over?**
+2. The answer is **240**, with `[1]` in the sentence. Point at **Sources used**: that passage was found *before* the model wrote a word. The card says which passage `[1]` is, and `in answer` marks that the model used it. The **Answer backed by the sources** card is a second model checking the answer against those passages.
+3. Click **I have 182 annual leave hours, 5 years of service and 25 pay periods left. How many hours would I lose?** Arithmetic is not something to trust a language model with, so the model calls `estimate_annual_leave`, Atlas runs it, and a tool card shows 332 projected hours and **92** lost to the 240 cap. The rule itself still comes from the handbook.
+4. Click **Which day is Independence Day observed in 2026?** The model calls `get_federal_holidays`. The tool card shows Saturday 4 July, observed Friday 3 July.
+5. Upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer. The Library scores the new file with the same self-test. With a longer file, the cards are labelled `vector`, `lexical`, or `both`, and the re-ranker puts the most useful passage first.
 
 ## Stack
 
@@ -61,7 +60,17 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look (no signup), sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or create your own account — signup is real: passwords are bcrypt-hashed and stored in SQLite, not a hardcoded list. Threads are per user. On first start only Demo Note is indexed. The other files in `sample_docs/` are used by the golden-set eval.
+Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look (no signup), sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or create your own account — signup is real: passwords are bcrypt-hashed and stored in SQLite, not a hardcoded list. Threads are per user. On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick). The files in `sample_docs/` are not in the Library: they are the corpus for the golden-set eval.
+
+To wipe everything and re-index the handbook with self-test scores (stop the API first, Chroma and SQLite are not meant for two writers):
+
+```powershell
+uv run python -m atlas.reset_library
+```
+
+On the server: `docker compose stop api`, then `docker compose run --rm api python -m atlas.reset_library`, then `docker compose up -d api`. It takes a few minutes and a few cents of OpenAI calls.
+
+To rebuild `handbook/` from upstream, see `scripts/build_handbook.py`.
 
 ### Redis (Library upload queue)
 
@@ -116,7 +125,7 @@ Right after a document is indexed, Atlas samples up to six passages spread acros
 
 ### Ask answer cache
 
-With Redis up, handbook-style Asks cache the finished answer (key = model + instructions + question + retrieved chunks + history). Same Ask again with the same retrieve context → skip the **generate** OpenAI call (retrieve and re-rank still run). Ticket/tool Asks are not cached. TTL default 1 hour (`ANSWER_CACHE_TTL_SECONDS`).
+With Redis up, handbook-style Asks cache the finished answer (key = model + instructions + question + retrieved chunks + history). Same Ask again with the same retrieve context → skip the **generate** OpenAI call (retrieve and re-rank still run). Asks that used a tool are not cached. TTL default 1 hour (`ANSWER_CACHE_TTL_SECONDS`).
 
 ## Deploy with Docker
 
