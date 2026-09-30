@@ -42,8 +42,13 @@ const MATCH_LABELS: Record<NonNullable<RetrievedChunk["match"]>, string> = {
   both: "Found by meaning and keywords",
 };
 
-function describeSource(chunk: RetrievedChunk): string {
-  const parts = [`Part ${chunk.chunk_index + 1} of this document`];
+function describeSource(chunk: RetrievedChunk, partCount: number | undefined): string {
+  const position = chunk.chunk_index + 1;
+  const parts = [
+    partCount
+      ? `Part ${position} of ${partCount} in ${displayTitle(chunk.document_title)}`
+      : `Part ${position} of ${displayTitle(chunk.document_title)}`,
+  ];
   if (chunk.match) {
     parts.push(MATCH_LABELS[chunk.match]);
   }
@@ -500,9 +505,9 @@ export default function App() {
         <div>
           <div className="section-label">Sources used</div>
           <p style={{ margin: 0, color: "var(--muted)", fontSize: 13 }}>
-            Chunks retrieve already found, plus any tool JSON. [n] in the
-            answer is which card the sentence used. This panel only displays.
-            It does not search.
+            The passages Atlas found for your question, best match first, plus
+            any tool results. A [1] in the answer means that sentence came from
+            card 1. This panel only shows them. It does not search.
           </p>
         </div>
         {answerCheck ? (
@@ -545,7 +550,10 @@ export default function App() {
                     </strong>
                   </header>
                   <p className="source-meta" title={sourceDetail(chunk)}>
-                    {describeSource(chunk)}
+                    {describeSource(
+                      chunk,
+                      documents.find((item) => item.id === chunk.document_id)?.chunk_count,
+                    )}
                   </p>
                   <p>{chunk.text}</p>
                 </article>
