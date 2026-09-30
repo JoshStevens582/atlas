@@ -29,6 +29,7 @@ export type IndexedDocument = {
   original_filename: string;
   chunk_count: number;
   created_at: string;
+  retrieval_check: { hits: number; total: number } | null;
 };
 
 export type IngestJob = {

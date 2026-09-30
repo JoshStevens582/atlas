@@ -110,6 +110,10 @@ Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (wo
 
 The golden-set eval only covers the sample docs. For documents users upload there is no answer key, so every handbook Ask gets a second, separate model call after the answer streams: it reads the question, the answer and the retrieved chunks and returns `supported`, `partly_supported` or `not_supported` with a one-line reason. The Sources panel shows it as a `check` stream event. It is a model judging a model, so it can be wrong, and the UI says so. It is skipped for tool answers and the "not in the handbook" reply, and if the call fails the Ask still succeeds with no verdict. The verdict is cached with the answer. Turn it off with `ANSWER_CHECK_ENABLED=false`; the model is `ANSWER_CHECK_MODEL` (default `gpt-4o-mini`).
 
+### Upload self-test
+
+Right after a document is indexed, Atlas samples up to six passages spread across it, has a model write one question per passage, then runs the real `retrieve` on each question. The Library shows `Self-test: 5/6 found` — how many questions got their own passage back. A low score means search is struggling with that document (scanned layout, tables, very repetitive text). It is a rough smoke test, not a guarantee: the questions are model-written and a question can fit more than one passage. It is skipped for documents with no passage over 200 characters, and if a model call fails the upload still succeeds with no score. Settings: `RETRIEVAL_CHECK_ENABLED`, `RETRIEVAL_CHECK_MODEL`, `RETRIEVAL_CHECK_SAMPLES`. The separate CLI ingest worker does not run it; the embedded worker and the no-Redis upload path do.
+
 ### Ask answer cache
 
 With Redis up, handbook-style Asks cache the finished answer (key = model + instructions + question + retrieved chunks + history). Same Ask again with the same retrieve context → skip the **generate** OpenAI call (retrieve and re-rank still run). Ticket/tool Asks are not cached. TTL default 1 hour (`ANSWER_CACHE_TTL_SECONDS`).

@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import cast
@@ -10,8 +11,10 @@ from atlas.config import Settings
 from atlas.db.models import Base
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.repositories.sql_repo import DocumentRepository
+from atlas.schemas.chat import DocumentOut, RetrievalCheckOut
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestError, IngestService
+from atlas.services.retrieval_selftest import RetrievalSelfTest
 
 DEMO_TEXT = "# Demo Note\n\nRefunds are issued within 14 days.\n"
 
@@ -49,6 +52,23 @@ class FakeEmbeddings:
         return vectors[:-1] if self._drop_last else vectors
 
 
+class StubSelfTest:
+    def __init__(
+        self,
+        result: RetrievalCheckOut | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        self._result = result
+        self._error = error
+        self.document_ids: list[str] = []
+
+    async def run(self, document_id: str) -> RetrievalCheckOut | None:
+        self.document_ids.append(document_id)
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+
 @pytest.fixture
 async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     engine = create_async_engine(
@@ -69,6 +89,7 @@ def _service(
     *,
     with_demo_note: bool = True,
     embeddings: FakeEmbeddings | None = None,
+    retrieval_check: StubSelfTest | None = None,
 ) -> IngestService:
     sample_docs = tmp_path / "sample_docs"
     sample_docs.mkdir()
@@ -82,6 +103,7 @@ def _service(
         factory,
         cast(ChromaChunkStore, store),
         cast(EmbeddingClient, embeddings or FakeEmbeddings()),
+        retrieval_check=cast(RetrievalSelfTest | None, retrieval_check),
     )
 
 
@@ -108,6 +130,62 @@ async def test_ingest_text_stores_chunks_and_records_the_document(
     assert (stored_id, stored_title) == ("doc-1", "Demo")
     assert len(stored_vectors) == len(stored_chunks)
     assert await _document_count(factory) == 1
+
+
+@pytest.mark.asyncio
+async def test_ingest_text_stores_and_returns_the_self_test_score(
+    factory: async_sessionmaker[AsyncSession], tmp_path: Path
+) -> None:
+    selftest = StubSelfTest(RetrievalCheckOut(hits=5, total=6))
+
+    document = await _service(
+        factory, RecordingChunkStore(), tmp_path, retrieval_check=selftest
+    ).ingest_text(DEMO_TEXT, title="Demo", original_filename="demo.md", document_id="doc-1")
+
+    assert selftest.document_ids == ["doc-1"]
+    assert document.retrieval_check == RetrievalCheckOut(hits=5, total=6)
+    async with factory() as session:
+        listed = await DocumentRepository(session).list_documents()
+    assert DocumentOut.from_document(listed[0]).retrieval_check == RetrievalCheckOut(
+        hits=5, total=6
+    )
+
+
+@pytest.mark.asyncio
+async def test_ingest_text_leaves_the_score_empty_when_the_self_test_has_none(
+    factory: async_sessionmaker[AsyncSession], tmp_path: Path
+) -> None:
+    document = await _service(
+        factory, RecordingChunkStore(), tmp_path, retrieval_check=StubSelfTest(None)
+    ).ingest_text(DEMO_TEXT, title="Demo", original_filename="demo.md")
+
+    assert document.retrieval_check is None
+
+
+@pytest.mark.asyncio
+async def test_ingest_text_still_succeeds_when_the_self_test_crashes(
+    factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    selftest = StubSelfTest(error=RuntimeError("chroma exploded"))
+
+    with caplog.at_level(logging.ERROR, logger="atlas.ingest"):
+        document = await _service(
+            factory, RecordingChunkStore(), tmp_path, retrieval_check=selftest
+        ).ingest_text(DEMO_TEXT, title="Demo", original_filename="demo.md")
+
+    assert document.retrieval_check is None
+    assert await _document_count(factory) == 1
+    assert "retrieval self-test crashed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_set_retrieval_check_ignores_an_unknown_document(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with factory() as session:
+        assert await DocumentRepository(session).set_retrieval_check("nope", 1, 2) is None
 
 
 @pytest.mark.asyncio

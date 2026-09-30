@@ -5,6 +5,7 @@ from sqlalchemy import inspect, text
 
 from atlas.config import Settings
 from atlas.db.session import (
+    _ensure_document_check_columns,
     _ensure_thread_owner_column,
     create_engine,
     create_session_factory,
@@ -81,6 +82,60 @@ async def test_init_database_adds_owner_column_to_an_old_threads_table(tmp_path:
         await engine.dispose()
 
     assert owner == "legacy"
+
+
+@pytest.mark.asyncio
+async def test_init_database_adds_self_test_columns_to_an_old_documents_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "CREATE TABLE indexed_documents ("
+                    "id VARCHAR(36) PRIMARY KEY, title VARCHAR(300), "
+                    "original_filename VARCHAR(300), chunk_count INTEGER, created_at DATETIME)"
+                )
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO indexed_documents (id, title, original_filename, chunk_count) "
+                    "VALUES ('old-doc', 'Old', 'old.md', 3)"
+                )
+            )
+
+        await init_database(engine)
+        await init_database(engine)
+
+        async with engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    text(
+                        "SELECT retrieval_check_hits, retrieval_check_total "
+                        "FROM indexed_documents WHERE id = 'old-doc'"
+                    )
+                )
+            ).one()
+    finally:
+        await engine.dispose()
+
+    assert tuple(row) == (None, None)
+
+
+@pytest.mark.asyncio
+async def test_document_columns_check_does_nothing_when_there_is_no_documents_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_ensure_document_check_columns)
+            tables = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+    finally:
+        await engine.dispose()
+
+    assert tables == []
 
 
 @pytest.mark.asyncio

@@ -380,6 +380,16 @@ export default function App() {
                   {displayTitle(document.title)}
                   <br />
                   <small>{document.chunk_count} chunks</small>
+                  {document.retrieval_check ? (
+                    <>
+                      <br />
+                      <small
+                        title="Questions written from this document's own passages. How many found their passage when searched."
+                      >
+                        Self-test: {document.retrieval_check.hits}/{document.retrieval_check.total} found
+                      </small>
+                    </>
+                  ) : null}
                 </span>
                 <button
                   className="pill"

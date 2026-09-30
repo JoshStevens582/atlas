@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Sequence
 from pathlib import Path
 from uuid import uuid4
@@ -8,10 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from atlas.config import Settings
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.repositories.sql_repo import DocumentRepository
-from atlas.schemas.chat import DocumentOut
+from atlas.schemas.chat import DocumentOut, RetrievalCheckOut
 from atlas.services.chunking import chunk_document
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.readers import extract_text, title_from_path
+from atlas.services.retrieval_selftest import RetrievalSelfTest
+
+logger = logging.getLogger("atlas.ingest")
 
 
 class IngestError(ValueError):
@@ -25,11 +29,13 @@ class IngestService:
         session_factory: async_sessionmaker[AsyncSession],
         chunk_store: ChromaChunkStore,
         embeddings: EmbeddingClient,
+        retrieval_check: RetrievalSelfTest | None = None,
     ) -> None:
         self._settings = settings
         self._session_factory = session_factory
         self._chunk_store = chunk_store
         self._embeddings = embeddings
+        self._retrieval_check = retrieval_check
 
     async def ingest_path(self, path: Path, title: str | None = None) -> DocumentOut:
         text = extract_text(path)
@@ -75,13 +81,22 @@ class IngestService:
                 chunk_count=len(chunks),
                 document_id=doc_id,
             )
-            return DocumentOut(
-                id=document.id,
-                title=document.title,
-                original_filename=document.original_filename,
-                chunk_count=document.chunk_count,
-                created_at=document.created_at.isoformat(),
-            )
+            check = await self._run_retrieval_check(doc_id)
+            if check is not None:
+                scored = await repo.set_retrieval_check(doc_id, check.hits, check.total)
+                document = scored or document
+            return DocumentOut.from_document(document)
+
+    async def _run_retrieval_check(self, document_id: str) -> RetrievalCheckOut | None:
+        """The self-test is a courtesy. The document is already indexed, so a
+        failure here is logged and the upload still succeeds with no score."""
+        if self._retrieval_check is None:
+            return None
+        try:
+            return await self._retrieval_check.run(document_id)
+        except Exception:
+            logger.exception("retrieval self-test crashed document_id=%s", document_id)
+            return None
 
     def _demo_note_path(self) -> Path:
         return Path(self._settings.sample_docs_dir) / "00-demo-note.md"

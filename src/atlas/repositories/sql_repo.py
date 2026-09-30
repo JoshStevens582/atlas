@@ -116,6 +116,18 @@ class DocumentRepository:
         await self._session.refresh(document)
         return document
 
+    async def set_retrieval_check(
+        self, document_id: str, hits: int, total: int
+    ) -> IndexedDocument | None:
+        document = await self.get_document(document_id)
+        if document is None:
+            return None
+        document.retrieval_check_hits = hits
+        document.retrieval_check_total = total
+        await self._session.commit()
+        await self._session.refresh(document)
+        return document
+
     async def delete_document(self, document_id: str) -> bool:
         document = await self.get_document(document_id)
         if document is None:
