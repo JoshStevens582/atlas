@@ -341,6 +341,38 @@ textarea {
   overflow: auto;
 }
 
+.answer-check {
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 14px;
+  padding: 12px;
+  background: #0a1220;
+  font-size: 13px;
+}
+
+.answer-check p {
+  margin: 6px 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.answer-check span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.answer-check.supported {
+  border-left-color: var(--accent);
+}
+
+.answer-check.partly_supported {
+  border-left-color: #f5c451;
+}
+
+.answer-check.not_supported {
+  border-left-color: var(--danger);
+}
+
 .tool-card {
   border-color: rgba(94, 234, 212, 0.35);
 }

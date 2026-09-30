@@ -4,7 +4,7 @@ import pytest
 from fakeredis.aioredis import FakeRedis
 
 from atlas.config import Settings
-from atlas.schemas.chat import RetrievedChunk
+from atlas.schemas.chat import AnswerCheck, RetrievedChunk
 from atlas.services.answer_cache import AnswerCache
 from atlas.services.prompting import DEVELOPER_INSTRUCTIONS
 
@@ -37,6 +37,24 @@ async def test_answer_cache_round_trip() -> None:
     assert hit is not None
     assert hit["answer"] == "Northstar."
     await redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_answer_cache_stores_the_check_verdict_with_the_answer() -> None:
+    cache_redis = FakeRedis(decode_responses=True)
+    cache = AnswerCache(cache_redis, Settings(answer_cache_ttl_seconds=60))
+    verdict = AnswerCheck(verdict="supported", reason="Source [1] says so.")
+
+    await cache.set("key-with-check", answer="Northstar.", sources=[_chunk()], check=verdict)
+    await cache.set("key-without-check", answer="Northstar.", sources=[_chunk()])
+
+    with_check = await cache.get("key-with-check")
+    without_check = await cache.get("key-without-check")
+    assert with_check is not None
+    assert with_check["check"] == {"verdict": "supported", "reason": "Source [1] says so."}
+    assert without_check is not None
+    assert "check" not in without_check
+    await cache_redis.aclose()
 
 
 @pytest.mark.asyncio

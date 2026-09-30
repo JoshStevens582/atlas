@@ -16,8 +16,9 @@ from atlas.repositories.sql_repo import (
     ThreadNotFoundError,
     ThreadRepository,
 )
-from atlas.schemas.chat import RetrievedChunk
+from atlas.schemas.chat import AnswerCheck, RetrievedChunk
 from atlas.services.answer_cache import AnswerCache
+from atlas.services.answer_check import AnswerChecker
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.rag import RagChatService
 from atlas.services.tools import ONLY_ONE_TICKET_TOOL
@@ -120,6 +121,7 @@ class StubAnswerCache:
         self._cached = cached
         self.gets: list[str] = []
         self.stored: list[tuple[str, str]] = []
+        self.stored_checks: list[AnswerCheck | None] = []
 
     def build_key(self, **kwargs: Any) -> str:
         return "key-1"
@@ -128,8 +130,34 @@ class StubAnswerCache:
         self.gets.append(key)
         return self._cached
 
-    async def set(self, key: str, *, answer: str, sources: list[RetrievedChunk]) -> None:
+    async def set(
+        self,
+        key: str,
+        *,
+        answer: str,
+        sources: list[RetrievedChunk],
+        check: AnswerCheck | None = None,
+    ) -> None:
         self.stored.append((key, answer))
+        self.stored_checks.append(check)
+
+
+class StubChecker:
+    def __init__(self, verdict: AnswerCheck | None) -> None:
+        self._verdict = verdict
+        self.calls: list[tuple[str, str, int]] = []
+
+    async def check(
+        self,
+        question: str,
+        answer: str,
+        sources: Sequence[RetrievedChunk],
+    ) -> AnswerCheck | None:
+        self.calls.append((question, answer, len(sources)))
+        return self._verdict
+
+
+SUPPORTED = AnswerCheck(verdict="supported", reason="Source [1] names Northstar.")
 
 
 @pytest.fixture(autouse=True)
@@ -155,6 +183,7 @@ def _service(
     openai: StubOpenAI,
     *,
     cache: StubAnswerCache | None = None,
+    checker: StubChecker | None = None,
     **overrides: Any,
 ) -> RagChatService:
     settings = Settings(openai_api_key="test-key", hybrid_search_enabled=False, **overrides)
@@ -165,6 +194,7 @@ def _service(
         cast(ChromaChunkStore, FakeChunkStore()),
         cast(EmbeddingClient, FakeEmbeddings()),
         answer_cache=cast(AnswerCache | None, cache),
+        answer_checker=cast(AnswerChecker | None, checker),
     )
 
 
@@ -494,6 +524,153 @@ async def test_run_ask_skips_the_cache_when_it_is_turned_off(
 
     assert cache.gets == []
     assert cache.stored == []
+
+
+@pytest.mark.asyncio
+async def test_run_ask_sends_a_check_event_after_the_sources_and_before_done(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    checker = StubChecker(SUPPORTED)
+    service = _service(
+        factory,
+        StubOpenAI([StubStream(["Northstar [1]"], _final())]),
+        checker=checker,
+    )
+
+    events = await _ask(service, "What is the project codename?")
+
+    assert _types(events) == ["thread", "sources", "token", "sources", "check", "done"]
+    assert events[4] == {
+        "type": "check",
+        "verdict": "supported",
+        "reason": "Source [1] names Northstar.",
+    }
+    assert checker.calls == [("What is the project codename?", "Northstar [1]", 1)]
+
+
+@pytest.mark.asyncio
+async def test_run_ask_sends_no_check_event_when_the_checker_gives_no_verdict(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    service = _service(
+        factory,
+        StubOpenAI([StubStream(["Northstar [1]"], _final())]),
+        checker=StubChecker(None),
+    )
+
+    events = await _ask(service, "What is the project codename?")
+
+    assert "check" not in _types(events)
+    assert events[-1]["answer"] == "Northstar [1]"
+
+
+@pytest.mark.asyncio
+async def test_run_ask_skips_the_check_when_it_is_turned_off(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    checker = StubChecker(SUPPORTED)
+    service = _service(
+        factory,
+        StubOpenAI([StubStream(["Northstar [1]"], _final())]),
+        checker=checker,
+        answer_check_enabled=False,
+    )
+
+    events = await _ask(service, "What is the project codename?")
+
+    assert "check" not in _types(events)
+    assert checker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_run_ask_does_not_check_an_answer_that_used_a_tool(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    checker = StubChecker(SUPPORTED)
+    openai = StubOpenAI(
+        [
+            StubStream([], _final("resp-1", [_call("list_support_tickets")])),
+            StubStream(["Three tickets."], _final("resp-2")),
+        ]
+    )
+    service = _service(factory, openai, checker=checker)
+
+    events = await _ask(service, "List all support tickets")
+
+    assert "check" not in _types(events)
+    assert checker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_run_ask_does_not_check_the_no_answer_fallback(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    checker = StubChecker(SUPPORTED)
+    service = _service(
+        factory,
+        StubOpenAI([StubStream([], _final())]),
+        checker=checker,
+    )
+
+    events = await _ask(service, "What is the project codename?")
+
+    assert events[-1]["answer"] == NO_ANSWER
+    assert checker.calls == []
+
+
+@pytest.mark.asyncio
+async def test_run_ask_stores_the_verdict_next_to_a_cached_answer(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    cache = StubAnswerCache()
+    service = _service(
+        factory,
+        StubOpenAI([StubStream(["Northstar [1]"], _final())]),
+        cache=cache,
+        checker=StubChecker(SUPPORTED),
+    )
+
+    await _ask(service, "What is the project codename?")
+
+    assert cache.stored_checks == [SUPPORTED]
+
+
+@pytest.mark.asyncio
+async def test_run_ask_replays_the_stored_verdict_on_a_cache_hit_without_checking_again(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    checker = StubChecker(SUPPORTED)
+    cache = StubAnswerCache(
+        {
+            "answer": "Cached: Northstar [1]",
+            "check": {"verdict": "partly_supported", "reason": "Only half is in [1]."},
+        }
+    )
+    service = _service(factory, StubOpenAI([]), cache=cache, checker=checker)
+
+    events = await _ask(service, "What is the project codename?")
+
+    assert _types(events) == ["thread", "sources", "sources", "token", "check", "done"]
+    assert events[4]["verdict"] == "partly_supported"
+    assert checker.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stored",
+    [None, "supported", {"verdict": "great", "reason": "x"}, {"verdict": "supported"}],
+)
+async def test_run_ask_ignores_a_missing_or_malformed_stored_verdict(
+    factory: async_sessionmaker[AsyncSession],
+    stored: object,
+) -> None:
+    cache = StubAnswerCache({"answer": "Cached: Northstar [1]", "check": stored})
+    service = _service(factory, StubOpenAI([]), cache=cache)
+
+    events = await _ask(service, "What is the project codename?")
+
+    assert "check" not in _types(events)
+    assert events[-1]["answer"] == "Cached: Northstar [1]"
 
 
 @pytest.mark.asyncio

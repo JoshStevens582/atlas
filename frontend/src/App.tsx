@@ -16,6 +16,8 @@ import {
   waitForIngestJob,
 } from "./api";
 import type {
+  AnswerCheck,
+  AnswerVerdict,
   ChatMessage,
   HealthStatus,
   IndexedDocument,
@@ -23,6 +25,12 @@ import type {
   ThreadSummary,
   ToolCall,
 } from "./types";
+
+const CHECK_LABELS: Record<AnswerVerdict, string> = {
+  supported: "Answer backed by the sources",
+  partly_supported: "Answer only partly backed by the sources",
+  not_supported: "Answer not backed by the sources",
+};
 
 function displayTitle(title: string): string {
   return title
@@ -58,6 +66,7 @@ export default function App() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sources, setSources] = useState<RetrievedChunk[]>([]);
+  const [answerCheck, setAnswerCheck] = useState<AnswerCheck | null>(null);
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -103,6 +112,7 @@ export default function App() {
     setThreadId(detail.id);
     setMessages(detail.messages);
     setSources([]);
+    setAnswerCheck(null);
     setToolCalls([]);
     setStage("idle");
   }
@@ -117,6 +127,7 @@ export default function App() {
     setStreaming(true);
     setStage("search");
     setSources([]);
+    setAnswerCheck(null);
     setToolCalls([]);
     setMessages((current) => [
       ...current,
@@ -168,6 +179,9 @@ export default function App() {
             }
             return copy;
           });
+        }
+        if (event.type === "check") {
+          setAnswerCheck({ verdict: event.verdict, reason: event.reason });
         }
         if (event.type === "error") {
           setError(event.detail);
@@ -228,6 +242,7 @@ export default function App() {
     setThreads([]);
     setDocuments([]);
     setSources([]);
+    setAnswerCheck(null);
     setToolCalls([]);
   }
 
@@ -324,7 +339,7 @@ export default function App() {
           <span className="pill">{health?.document_count ?? 0} docs</span>
           <span className="pill">{health?.chunk_count ?? 0} chunks</span>
         </div>
-        <button className="new-chat" onClick={() => { setThreadId(null); setMessages([]); setSources([]); setToolCalls([]); }}>
+        <button className="new-chat" onClick={() => { setThreadId(null); setMessages([]); setSources([]); setAnswerCheck(null); setToolCalls([]); }}>
           New chat
         </button>
         <button className="new-chat" onClick={onLogout} type="button">
@@ -460,6 +475,13 @@ export default function App() {
             It does not search.
           </p>
         </div>
+        {answerCheck ? (
+          <div className={`answer-check ${answerCheck.verdict}`}>
+            <strong>{CHECK_LABELS[answerCheck.verdict]}</strong>
+            <p>{answerCheck.reason}</p>
+            <span>Second-model check of this answer against the sources. It can be wrong.</span>
+          </div>
+        ) : null}
         <div className="stack">
           {toolCalls.map((call, index) => (
             <article className="source-card tool-card" key={`${call.name}-${index}`}>

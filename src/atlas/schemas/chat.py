@@ -1,4 +1,13 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+class AnswerCheck(BaseModel):
+    """A second model's verdict on whether an answer is backed by its sources."""
+
+    verdict: Literal["supported", "partly_supported", "not_supported"]
+    reason: str
 
 
 class RetrievedChunk(BaseModel):

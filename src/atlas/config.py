@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     hybrid_rrf_k: int = 60
     rerank_enabled: bool = True
     rerank_model: str = "gpt-4o-mini"
+    answer_check_enabled: bool = True
+    answer_check_model: str = "gpt-4o-mini"
     history_window: int = 12
     max_tool_rounds: int = 3
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

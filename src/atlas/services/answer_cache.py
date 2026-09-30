@@ -8,7 +8,7 @@ from typing import Any
 from redis.asyncio import Redis
 
 from atlas.config import Settings
-from atlas.schemas.chat import RetrievedChunk
+from atlas.schemas.chat import AnswerCheck, RetrievedChunk
 
 logger = logging.getLogger("atlas.answer_cache")
 
@@ -67,14 +67,23 @@ class AnswerCache:
             return None
         return payload
 
-    async def set(self, key: str, *, answer: str, sources: list[RetrievedChunk]) -> None:
+    async def set(
+        self,
+        key: str,
+        *,
+        answer: str,
+        sources: list[RetrievedChunk],
+        check: AnswerCheck | None = None,
+    ) -> None:
         ttl = self._settings.answer_cache_ttl_seconds
         if ttl <= 0:
             return
-        payload = {
+        payload: dict[str, Any] = {
             "answer": answer,
             "sources": [chunk.model_dump() for chunk in sources],
         }
+        if check is not None:
+            payload["check"] = check.model_dump()
         try:
             await self._client.set(key, json.dumps(payload), ex=ttl)
         except Exception as exc:
