@@ -377,6 +377,15 @@ textarea {
   border-color: rgba(94, 234, 212, 0.35);
 }
 
+.source-card p.source-meta {
+  margin: 0 0 8px;
+  max-height: none;
+  overflow: visible;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: help;
+}
+
 .score {
   font-family: "IBM Plex Mono", monospace;
   font-size: 11px;
