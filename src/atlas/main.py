@@ -20,6 +20,7 @@ from atlas.config import (
 from atlas.db.session import create_engine, create_session_factory, init_database
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.services.answer_cache import AnswerCache
+from atlas.services.answer_check import LlmAnswerChecker
 from atlas.services.auth import seed_demo_users
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
@@ -78,6 +79,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.rerank_enabled
         else None
     )
+    answer_checker = (
+        LlmAnswerChecker(openai_client, settings.answer_check_model)
+        if settings.answer_check_enabled
+        else None
+    )
     rag_service = RagChatService(
         settings,
         openai_client,
@@ -86,6 +92,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         embeddings,
         answer_cache=answer_cache,
         reranker=reranker,
+        answer_checker=answer_checker,
     )
     ingest_queue = (
         IngestQueue(redis_client, settings)

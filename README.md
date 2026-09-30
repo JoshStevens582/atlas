@@ -106,6 +106,10 @@ Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (wo
 
 **Also set a hard spend limit in the OpenAI dashboard** (Settings → Billing / Limits). That is the last stop if something bypasses the app.
 
+### Answer check (works on any uploaded document)
+
+The golden-set eval only covers the sample docs. For documents users upload there is no answer key, so every handbook Ask gets a second, separate model call after the answer streams: it reads the question, the answer and the retrieved chunks and returns `supported`, `partly_supported` or `not_supported` with a one-line reason. The Sources panel shows it as a `check` stream event. It is a model judging a model, so it can be wrong, and the UI says so. It is skipped for tool answers and the "not in the handbook" reply, and if the call fails the Ask still succeeds with no verdict. The verdict is cached with the answer. Turn it off with `ANSWER_CHECK_ENABLED=false`; the model is `ANSWER_CHECK_MODEL` (default `gpt-4o-mini`).
+
 ### Ask answer cache
 
 With Redis up, handbook-style Asks cache the finished answer (key = model + instructions + question + retrieved chunks + history). Same Ask again with the same retrieve context → skip the **generate** OpenAI call (retrieve and re-rank still run). Ticket/tool Asks are not cached. TTL default 1 hour (`ANSWER_CACHE_TTL_SECONDS`).

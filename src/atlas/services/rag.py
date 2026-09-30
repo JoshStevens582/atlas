@@ -5,14 +5,22 @@ from typing import Any, cast
 from openai import AsyncOpenAI
 from openai.types.responses import EasyInputMessageParam
 from openai.types.responses.response_input_param import ResponseInputParam
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atlas.config import Settings
 from atlas.db.models import ChatMessage
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.repositories.sql_repo import ThreadRepository
-from atlas.schemas.chat import ChatMessageOut, RetrievedChunk, ThreadDetailOut, ThreadOut
+from atlas.schemas.chat import (
+    AnswerCheck,
+    ChatMessageOut,
+    RetrievedChunk,
+    ThreadDetailOut,
+    ThreadOut,
+)
 from atlas.services.answer_cache import AnswerCache
+from atlas.services.answer_check import AnswerChecker
 from atlas.services.citations import assign_cite_numbers, mark_cited_chunks
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.hybrid import bm25_rank, fuse_hybrid
@@ -33,6 +41,8 @@ from atlas.services.tools import (
     run_allowlisted_tool,
 )
 
+NO_ANSWER_TEXT = "I could not generate an answer from the retrieved documents."
+
 
 # Retrieve-then-generate chat service for Atlas.
 class RagChatService:
@@ -45,6 +55,7 @@ class RagChatService:
         embeddings: EmbeddingClient,
         answer_cache: AnswerCache | None = None,
         reranker: Reranker | None = None,
+        answer_checker: AnswerChecker | None = None,
     ) -> None:
         self._settings = settings
         self._openai = openai_client
@@ -53,6 +64,7 @@ class RagChatService:
         self._embeddings = embeddings
         self._answer_cache = answer_cache
         self._reranker = reranker
+        self._answer_checker = answer_checker
 
     async def list_threads(self, owner_id: str) -> list[ThreadOut]:
         async with self._session_factory() as session:
@@ -158,7 +170,7 @@ class RagChatService:
         )
         answer = response.output_text.strip()
         if not answer:
-            answer = "I could not generate an answer from the retrieved documents."
+            answer = NO_ANSWER_TEXT
         return mark_cited_chunks(sources, answer), answer
 
     async def run_ask(
@@ -218,6 +230,9 @@ class RagChatService:
                         "sources": [chunk.model_dump() for chunk in sources],
                     }
                     yield {"type": "token", "text": answer}
+                    cached_check = _cached_check(cached)
+                    if cached_check is not None:
+                        yield {"type": "check", **cached_check.model_dump()}
                     async with self._session_factory() as session:
                         await ThreadRepository(session).add_message(
                             thread.id, "assistant", answer
@@ -247,7 +262,7 @@ class RagChatService:
                 yield event
             answer = answer.strip()
             if not answer:
-                answer = "I could not generate an answer from the retrieved documents."
+                answer = NO_ANSWER_TEXT
                 yield {"type": "token", "text": answer}
 
             sources = mark_cited_chunks(sources, answer)
@@ -256,12 +271,26 @@ class RagChatService:
                 "sources": [chunk.model_dump() for chunk in sources],
             }
 
+            # A tool answer rests on tool output, not on the sources, so it is not checked.
+            answer_check = (
+                None
+                if used_tools or answer == NO_ANSWER_TEXT
+                else await self._check_answer(cleaned, answer, sources)
+            )
+            if answer_check is not None:
+                yield {"type": "check", **answer_check.model_dump()}
+
             if (
                 cache_key is not None
                 and self._answer_cache is not None
                 and not used_tools
             ):
-                await self._answer_cache.set(cache_key, answer=answer, sources=sources)
+                await self._answer_cache.set(
+                    cache_key,
+                    answer=answer,
+                    sources=sources,
+                    check=answer_check,
+                )
 
             async with self._session_factory() as session:
                 await ThreadRepository(session).add_message(thread.id, "assistant", answer)
@@ -271,6 +300,16 @@ class RagChatService:
             trace.record_error(exc)
             trace.complete("")
             raise
+
+    async def _check_answer(
+        self,
+        question: str,
+        answer: str,
+        sources: list[RetrievedChunk],
+    ) -> AnswerCheck | None:
+        if self._answer_checker is None or not self._settings.answer_check_enabled:
+            return None
+        return await self._answer_checker.check(question, answer, sources)
 
     async def _ensure_thread(
         self,
@@ -389,6 +428,17 @@ def _history_as_input(history: list[ChatMessage]) -> list[EasyInputMessageParam]
 
 async def _in_thread(func: Any, *args: Any) -> Any:
     return await asyncio.to_thread(func, *args)
+
+
+def _cached_check(cached: dict[str, Any]) -> AnswerCheck | None:
+    """The verdict stored next to a cached answer, or None if absent or malformed."""
+    stored = cached.get("check")
+    if not isinstance(stored, dict):
+        return None
+    try:
+        return AnswerCheck.model_validate(stored)
+    except ValidationError:
+        return None
 
 
 def _function_calls(response: Any) -> list[Any]:

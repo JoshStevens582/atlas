@@ -52,11 +52,19 @@ export type RetrievedChunk = {
   cited?: boolean | null;
 };
 
+export type AnswerVerdict = "supported" | "partly_supported" | "not_supported";
+
+export type AnswerCheck = {
+  verdict: AnswerVerdict;
+  reason: string;
+};
+
 export type StreamEvent =
   | { type: "thread"; thread: ThreadSummary }
   | { type: "sources"; sources: RetrievedChunk[] }
   | { type: "tool"; name: string; arguments: Record<string, unknown>; result: string }
   | { type: "token"; text: string }
+  | ({ type: "check" } & AnswerCheck)
   | { type: "done"; answer: string }
   | { type: "error"; detail: string };
 
