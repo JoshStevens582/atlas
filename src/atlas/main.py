@@ -148,7 +148,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         worker_task = asyncio.create_task(_embedded_worker(), name="atlas-ingest-worker")
 
     if settings.openai_api_key:
-        await ingest_service.seed_sample_docs()
+        await ingest_service.seed_library()
 
     yield
 

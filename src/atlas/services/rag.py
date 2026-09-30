@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
@@ -31,17 +32,16 @@ from atlas.services.prompting import (
     keep_close_chunks,
 )
 from atlas.services.rerank import Reranker
-from atlas.services.tools import (
-    ATLAS_TOOLS,
-    ONLY_ONE_TICKET_TOOL,
-    is_ticket_tool,
-    order_tool_calls,
-    parse_tool_arguments,
-    resolve_ticket_call,
-    run_allowlisted_tool,
-)
+from atlas.services.tools import ATLAS_TOOLS, parse_tool_arguments, run_allowlisted_tool
 
 NO_ANSWER_TEXT = "I could not generate an answer from the retrieved documents."
+# The model may ask for several tools in one round. Every call id needs an
+# output, so the extras get this error instead of running.
+MAX_TOOL_CALLS_PER_ROUND = 4
+TOO_MANY_TOOL_CALLS = json.dumps(
+    {"error": f"At most {MAX_TOOL_CALLS_PER_ROUND} tool calls per step."},
+    separators=(",", ":"),
+)
 
 
 # Retrieve-then-generate chat service for Atlas.
@@ -250,11 +250,7 @@ class RagChatService:
             )
             answer = ""
             used_tools = False
-            async for event in self._call_chat_model(
-                prompt_messages,
-                trace,
-                cleaned,
-            ):
+            async for event in self._call_chat_model(prompt_messages, trace):
                 if event.get("type") == "tool":
                     used_tools = True
                 if event.get("type") == "token":
@@ -331,14 +327,12 @@ class RagChatService:
         self,
         prompt_messages: list[EasyInputMessageParam],
         trace: AskTrace,
-        question: str,
     ) -> AsyncIterator[dict[str, Any]]:
         previous_response_id: str | None = None
         tool_outputs: list[dict[str, str]] = []
         max_rounds = self._settings.max_tool_rounds
         if max_rounds < 1:
             max_rounds = 1
-        used_ticket_tool = False
 
         for _round in range(max_rounds + 1):
             text_parts, response = await self._complete_model_round(
@@ -355,17 +349,14 @@ class RagChatService:
                 return
 
             tool_outputs = []
-            for call in order_tool_calls(function_calls):
+            for position, call in enumerate(function_calls):
                 name = str(getattr(call, "name", "") or "")
                 arguments = str(getattr(call, "arguments", "") or "{}")
-                name, arguments = resolve_ticket_call(name, arguments, question)
                 call_id = str(getattr(call, "call_id", "") or "")
-                if is_ticket_tool(name) and used_ticket_tool:
-                    result = ONLY_ONE_TICKET_TOOL
+                if position >= MAX_TOOL_CALLS_PER_ROUND:
+                    result = TOO_MANY_TOOL_CALLS
                 else:
                     result = run_allowlisted_tool(name, arguments)
-                    if is_ticket_tool(name):
-                        used_ticket_tool = True
                     trace.record_tool(name)
                     yield {
                         "type": "tool",

@@ -12,7 +12,12 @@ from atlas.repositories.sql_repo import DocumentRepository
 from atlas.schemas.chat import DocumentOut, RetrievalCheckOut
 from atlas.services.chunking import chunk_document
 from atlas.services.embeddings import EmbeddingClient
-from atlas.services.readers import extract_text, title_from_path
+from atlas.services.readers import (
+    SUPPORTED_SUFFIXES,
+    extract_text,
+    title_from_path,
+    title_from_text,
+)
 from atlas.services.retrieval_selftest import RetrievalSelfTest
 
 logger = logging.getLogger("atlas.ingest")
@@ -51,6 +56,7 @@ class IngestService:
         title: str,
         original_filename: str,
         document_id: str | None = None,
+        run_retrieval_check: bool = True,
     ) -> DocumentOut:
         chunks = chunk_document(
             text,
@@ -81,7 +87,7 @@ class IngestService:
                 chunk_count=len(chunks),
                 document_id=doc_id,
             )
-            check = await self._run_retrieval_check(doc_id)
+            check = await self._run_retrieval_check(doc_id) if run_retrieval_check else None
             if check is not None:
                 scored = await repo.set_retrieval_check(doc_id, check.hits, check.total)
                 document = scored or document
@@ -98,22 +104,48 @@ class IngestService:
             logger.exception("retrieval self-test crashed document_id=%s", document_id)
             return None
 
-    def _demo_note_path(self) -> Path:
-        return Path(self._settings.sample_docs_dir) / "00-demo-note.md"
+    def _library_paths(self) -> list[Path]:
+        library_dir = Path(self._settings.library_dir)
+        if not library_dir.is_dir():
+            return []
+        return sorted(
+            path
+            for path in library_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
+        )
 
-    async def seed_sample_docs(self) -> list[DocumentOut]:
-        """Index only the current Demo Note so boot does not reload old uploads."""
+    async def _ingest_library_file(
+        self, path: Path, *, run_retrieval_check: bool
+    ) -> DocumentOut:
+        """Library pages are named for their first heading, not their file name."""
+        text = extract_text(path)
+        return await self.ingest_text(
+            text=text,
+            title=title_from_text(text, title_from_path(path)),
+            original_filename=path.name,
+            run_retrieval_check=run_retrieval_check,
+        )
+
+    async def seed_library(self) -> list[DocumentOut]:
+        """Index the handbook library once, on an empty database.
+
+        The self-test is skipped here so a fresh boot is not held up by
+        one extra round of model calls per page. ``reset_library`` runs it.
+        """
         async with self._session_factory() as session:
             existing = await DocumentRepository(session).count_documents()
         if existing > 0:
             return []
-        demo_path = self._demo_note_path()
-        if not demo_path.exists():
-            return []
-        return [await self.ingest_path(demo_path)]
+        return [
+            await self._ingest_library_file(path, run_retrieval_check=False)
+            for path in self._library_paths()
+        ]
 
-    async def reset_corpus_to_demo_note(self) -> DocumentOut:
-        """Wipe duplicate uploads/index rows and ingest the current Demo Note once."""
+    async def reset_library(self) -> list[DocumentOut]:
+        """Wipe every document and upload, then index the handbook library again."""
+        paths = self._library_paths()
+        if not paths:
+            raise IngestError(f"No library documents found in {self._settings.library_dir}.")
         async with self._session_factory() as session:
             await DocumentRepository(session).delete_all_documents()
         await asyncio.to_thread(self._chunk_store.reset)
@@ -122,10 +154,9 @@ class IngestService:
             for path in upload_dir.iterdir():
                 if path.is_file():
                     path.unlink()
-        demo_path = self._demo_note_path()
-        if not demo_path.exists():
-            raise IngestError("sample_docs/00-demo-note.md is missing.")
-        return await self.ingest_path(demo_path)
+        return [
+            await self._ingest_library_file(path, run_retrieval_check=True) for path in paths
+        ]
 
     async def reset_and_ingest_paths(self, paths: Sequence[Path]) -> list[DocumentOut]:
         """Wipe the index and ingest the given files. Used by the eval runner."""

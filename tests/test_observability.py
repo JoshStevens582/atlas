@@ -37,7 +37,7 @@ def test_ask_trace_records_retrieve_tools_and_usage() -> None:
             )
         ]
     )
-    trace.record_tool("list_support_tickets")
+    trace.record_tool("get_federal_holidays")
     trace.record_usage(
         SimpleNamespace(usage=SimpleNamespace(input_tokens=12, output_tokens=8))
     )
@@ -48,7 +48,7 @@ def test_ask_trace_records_retrieve_tools_and_usage() -> None:
     assert trace.thread_id == "thread-1"
     assert trace.chunk_ids == ["doc-a:0"]
     assert trace.chunk_titles == ["Demo Note"]
-    assert trace.tool_names == ["list_support_tickets"]
+    assert trace.tool_names == ["get_federal_holidays"]
     assert trace.input_tokens == 12
     assert trace.output_tokens == 8
     assert trace.question_chars == len("What is the project codename?")

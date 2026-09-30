@@ -1,70 +1,84 @@
+"""Tools the chat model may call. Both do exact calculations the handbook text
+cannot do: the rules live in the handbook (retrieved), the arithmetic lives here.
+"""
+
 import json
-import re
+import math
+from datetime import date, timedelta
 from typing import Any
 
-GET_SUPPORT_TICKET = "get_support_ticket"
-LIST_SUPPORT_TICKETS = "list_support_tickets"
-_TICKET_TOOLS = {GET_SUPPORT_TICKET, LIST_SUPPORT_TICKETS}
-ONLY_ONE_TICKET_TOOL = json.dumps(
-    {"error": "Only one ticket tool per Ask."},
-    separators=(",", ":"),
-)
-_TICKET_NUMBERS = {"104": "T-104", "201": "T-201", "330": "T-330"}
-_TICKET_MENTION = re.compile(r"\bt[\s-]*(104|201|330)\b", re.IGNORECASE)
+ESTIMATE_ANNUAL_LEAVE = "estimate_annual_leave"
+GET_FEDERAL_HOLIDAYS = "get_federal_holidays"
 
-SUPPORT_TICKETS: dict[str, dict[str, str]] = {
-    "T-104": {
-        "status": "in_transit",
-        "summary": "Replacement sample hardware is in transit. ETA Thursday.",
-        "last_update": "2026-09-15",
-    },
-    "T-201": {
-        "status": "refund_issued",
-        "summary": "Refund processed as store credit only. No cash payout.",
-        "last_update": "2026-09-12",
-    },
-    "T-330": {
-        "status": "awaiting_photo",
-        "summary": "Waiting for a photo of unopened packaging before the return can proceed.",
-        "last_update": "2026-09-14",
-    },
-}
+# From the handbook leave page: accrual tiers by years of federal service.
+ANNUAL_LEAVE_CARRYOVER_CAP_HOURS = 240
+MAX_PAY_PERIODS_PER_YEAR = 26
+MAX_YEARS_OF_SERVICE = 60
+MAX_LEAVE_HOURS = 2000
+# Juneteenth became a federal holiday in 2021, so earlier years would be wrong.
+FIRST_HOLIDAY_YEAR = 2021
+LAST_HOLIDAY_YEAR = 2100
+
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_MONDAY = 0
+_THURSDAY = 3
+_SATURDAY = 5
+_SUNDAY = 6
+
+class ToolInputError(ValueError):
+    """The model sent arguments a tool cannot use. The message goes back to it."""
+
 
 ATLAS_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
-        "name": GET_SUPPORT_TICKET,
+        "name": ESTIMATE_ANNUAL_LEAVE,
         "description": (
-            "Look up one live support ticket. "
-            "ticket_id is required. Valid ids: T-104, T-201, T-330. "
-            "Do not use this to list every ticket. "
-            "Use this for that ticket's status, shipping, or ETA. "
-            "Do not use this for handbook policies such as refund windows."
+            "Project a person's annual leave hours at the end of the leave year and "
+            "how many hours they would lose to the carry-over cap (use or lose). "
+            "Use this whenever the user gives their own numbers (current balance, "
+            "years of federal service, pay periods left) and wants a total. "
+            "Never do this arithmetic yourself. "
+            "Do not use this to explain the leave rules; those are in the handbook."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "ticket_id": {
-                    "type": "string",
-                    "description": "Required support ticket id, for example T-104.",
-                }
+                "current_hours": {
+                    "type": "number",
+                    "description": "Annual leave hours available right now.",
+                },
+                "years_of_service": {
+                    "type": "number",
+                    "description": "Years of federal service. Sets the accrual rate.",
+                },
+                "pay_periods_remaining": {
+                    "type": "integer",
+                    "description": "Pay periods left in the leave year (0 to 26).",
+                },
             },
-            "required": ["ticket_id"],
+            "required": ["current_hours", "years_of_service", "pay_periods_remaining"],
             "additionalProperties": False,
         },
     },
     {
         "type": "function",
-        "name": LIST_SUPPORT_TICKETS,
+        "name": GET_FEDERAL_HOLIDAYS,
         "description": (
-            "List every live support ticket id, status, and summary. "
-            "Use this only when the user asks for all tickets or what tickets exist. "
-            "Do not use this when the user names one id such as T-104. "
-            "Do not use this for handbook policies."
+            "List the federal holidays for one calendar year with their dates, the "
+            "weekday, and the day they are observed when they fall on a weekend. "
+            "Use this for any question about which day a holiday falls on. "
+            "Do not use this for holiday pay rules; those are in the handbook."
         ),
         "parameters": {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "year": {
+                    "type": "integer",
+                    "description": f"Calendar year, {FIRST_HOLIDAY_YEAR} to {LAST_HOLIDAY_YEAR}.",
+                }
+            },
+            "required": ["year"],
             "additionalProperties": False,
         },
     },
@@ -73,9 +87,7 @@ ATLAS_TOOLS: list[dict[str, Any]] = [
 
 def run_allowlisted_tool(name: str, arguments_json: str) -> str:
     """Execute one model-proposed tool. Unknown names are rejected."""
-    if name == LIST_SUPPORT_TICKETS:
-        return list_support_tickets()
-    if name != GET_SUPPORT_TICKET:
+    if name not in {ESTIMATE_ANNUAL_LEAVE, GET_FEDERAL_HOLIDAYS}:
         return _tool_error(f"Unknown tool '{name}'.")
     try:
         payload: object = json.loads(arguments_json)
@@ -83,93 +95,12 @@ def run_allowlisted_tool(name: str, arguments_json: str) -> str:
         return _tool_error("Tool arguments were not valid JSON.")
     if not isinstance(payload, dict):
         return _tool_error("Tool arguments must be a JSON object.")
-    ticket_id = payload.get("ticket_id")
-    if ticket_id is None or (isinstance(ticket_id, str) and not ticket_id.strip()):
-        return _tool_error("ticket_id is required. Use list_support_tickets for all tickets.")
-    if not isinstance(ticket_id, str):
-        return _tool_error("ticket_id must be a string.")
-    return lookup_support_ticket(ticket_id)
-
-
-def is_ticket_tool(name: str) -> bool:
-    return name in _TICKET_TOOLS
-
-
-def ticket_id_from_arguments(arguments_json: str) -> str:
-    parsed = parse_tool_arguments(arguments_json)
-    raw = parsed.get("ticket_id")
-    if isinstance(raw, str):
-        return raw.strip()
-    return ""
-
-
-def normalize_ticket_id(raw: str) -> str:
-    compact = re.sub(r"[^a-z0-9]", "", raw.casefold())
-    if compact.startswith("t") and compact[1:] in _TICKET_NUMBERS:
-        return _TICKET_NUMBERS[compact[1:]]
-    if compact in _TICKET_NUMBERS:
-        return _TICKET_NUMBERS[compact]
-    return raw.strip().upper()
-
-
-def ticket_ids_in_text(text: str) -> list[str]:
-    found: list[str] = []
-    seen: set[str] = set()
-    for match in _TICKET_MENTION.finditer(text):
-        ticket_id = _TICKET_NUMBERS[match.group(1)]
-        if ticket_id in seen:
-            continue
-        seen.add(ticket_id)
-        found.append(ticket_id)
-    return found
-
-
-def resolve_ticket_call(
-    name: str,
-    arguments_json: str,
-    question: str,
-) -> tuple[str, str]:
-    """If the question names one ticket, always look that id up. Not the full list."""
-    ids = ticket_ids_in_text(question)
-    if len(ids) != 1 or not is_ticket_tool(name):
-        return name, arguments_json
-    ticket_id = ids[0]
-    if name == LIST_SUPPORT_TICKETS or not ticket_id_from_arguments(arguments_json):
-        return GET_SUPPORT_TICKET, json.dumps({"ticket_id": ticket_id})
-    return GET_SUPPORT_TICKET, json.dumps(
-        {"ticket_id": normalize_ticket_id(ticket_id_from_arguments(arguments_json)) or ticket_id}
-    )
-
-
-def order_tool_calls(calls: list[Any]) -> list[Any]:
-    """Run a one-id lookup before a full list so mixed Asks keep one real ticket tool."""
-
-    def sort_key(call: Any) -> int:
-        name = str(getattr(call, "name", "") or "")
-        arguments = str(getattr(call, "arguments", "") or "{}")
-        if name == GET_SUPPORT_TICKET and ticket_id_from_arguments(arguments):
-            return 0
-        if is_ticket_tool(name):
-            return 1
-        return 2
-
-    return sorted(calls, key=sort_key)
-
-
-def list_support_tickets() -> str:
-    tickets = [
-        {"ticket_id": ticket_id, **record}
-        for ticket_id, record in SUPPORT_TICKETS.items()
-    ]
-    return json.dumps({"tickets": tickets}, separators=(",", ":"))
-
-
-def lookup_support_ticket(ticket_id: str) -> str:
-    normalized = normalize_ticket_id(ticket_id)
-    record = SUPPORT_TICKETS.get(normalized)
-    if record is None:
-        return _tool_error(f"No support ticket named {normalized}.")
-    return json.dumps({"ticket_id": normalized, **record}, separators=(",", ":"))
+    try:
+        if name == GET_FEDERAL_HOLIDAYS:
+            return _run_get_federal_holidays(payload)
+        return _run_estimate_annual_leave(payload)
+    except ToolInputError as exc:
+        return _tool_error(str(exc))
 
 
 def parse_tool_arguments(arguments_json: str) -> dict[str, Any]:
@@ -180,6 +111,132 @@ def parse_tool_arguments(arguments_json: str) -> dict[str, Any]:
     if isinstance(payload, dict):
         return payload
     return {"raw": arguments_json}
+
+
+def annual_leave_hours_per_pay_period(years_of_service: float) -> int:
+    """Handbook tiers: under 3 years 4, from 3 up to 15 years 6, 15 or more 8."""
+    if years_of_service < 3:
+        return 4
+    if years_of_service < 15:
+        return 6
+    return 8
+
+
+def federal_holidays(year: int) -> list[dict[str, str]]:
+    """The eleven federal holidays (5 U.S.C. 6103) for ``year``.
+
+    Inauguration Day is left out: it only applies in the Washington, DC area.
+    """
+    holidays: list[tuple[str, date]] = [
+        ("New Year's Day", date(year, 1, 1)),
+        ("Birthday of Martin Luther King, Jr.", _nth_weekday(year, 1, _MONDAY, 3)),
+        ("Washington's Birthday", _nth_weekday(year, 2, _MONDAY, 3)),
+        ("Memorial Day", _last_weekday(year, 5, _MONDAY)),
+        ("Juneteenth National Independence Day", date(year, 6, 19)),
+        ("Independence Day", date(year, 7, 4)),
+        ("Labor Day", _nth_weekday(year, 9, _MONDAY, 1)),
+        ("Columbus Day", _nth_weekday(year, 10, _MONDAY, 2)),
+        ("Veterans Day", date(year, 11, 11)),
+        ("Thanksgiving Day", _nth_weekday(year, 11, _THURSDAY, 4)),
+        ("Christmas Day", date(year, 12, 25)),
+    ]
+    return [
+        {
+            "name": name,
+            "date": day.isoformat(),
+            "weekday": _WEEKDAYS[day.weekday()],
+            "observed": _observed(day).isoformat(),
+        }
+        for name, day in holidays
+    ]
+
+
+def estimate_annual_leave(
+    current_hours: float,
+    years_of_service: float,
+    pay_periods_remaining: int,
+) -> dict[str, Any]:
+    rate = annual_leave_hours_per_pay_period(years_of_service)
+    accrued = rate * pay_periods_remaining
+    projected = current_hours + accrued
+    return {
+        "hours_per_pay_period": rate,
+        "hours_accrued": accrued,
+        "projected_hours": round(projected, 2),
+        "carryover_cap_hours": ANNUAL_LEAVE_CARRYOVER_CAP_HOURS,
+        "use_or_lose_hours": round(max(0.0, projected - ANNUAL_LEAVE_CARRYOVER_CAP_HOURS), 2),
+        "assumption": (
+            "Uses one accrual rate for every remaining pay period. If a work "
+            "anniversary falls before the end of the leave year, the rate may step up."
+        ),
+    }
+
+
+def _run_estimate_annual_leave(payload: dict[str, Any]) -> str:
+    current_hours = _read_number(payload, "current_hours", 0, MAX_LEAVE_HOURS)
+    years = _read_number(payload, "years_of_service", 0, MAX_YEARS_OF_SERVICE)
+    periods = _read_whole_number(payload, "pay_periods_remaining", 0, MAX_PAY_PERIODS_PER_YEAR)
+    return json.dumps(
+        estimate_annual_leave(current_hours, years, periods),
+        separators=(",", ":"),
+    )
+
+
+def _run_get_federal_holidays(payload: dict[str, Any]) -> str:
+    year = _read_whole_number(payload, "year", FIRST_HOLIDAY_YEAR, LAST_HOLIDAY_YEAR)
+    return json.dumps(
+        {
+            "year": year,
+            "holidays": federal_holidays(year),
+            "note": (
+                "Observed is the day off when the holiday falls on a Saturday (Friday) "
+                "or Sunday (Monday). An agency can move a holiday for people whose "
+                "schedule has that day off."
+            ),
+        },
+        separators=(",", ":"),
+    )
+
+
+def _read_number(payload: dict[str, Any], key: str, low: float, high: float) -> float:
+    """A number in range. Booleans and NaN are not numbers here."""
+    if key not in payload or payload[key] is None:
+        raise ToolInputError(f"{key} is required.")
+    value = payload[key]
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ToolInputError(f"{key} must be a number.")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ToolInputError(f"{key} must be a finite number.")
+    if value < low or value > high:
+        raise ToolInputError(f"{key} must be between {low:g} and {high:g}.")
+    return float(value)
+
+
+def _read_whole_number(payload: dict[str, Any], key: str, low: int, high: int) -> int:
+    value = _read_number(payload, key, low, high)
+    if not value.is_integer():
+        raise ToolInputError(f"{key} must be a whole number.")
+    return int(value)
+
+
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    first = date(year, month, 1)
+    offset = (weekday - first.weekday()) % 7
+    return first + timedelta(days=offset + 7 * (n - 1))
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    following_month = date(year + (month == 12), month % 12 + 1, 1)
+    last_day = following_month - timedelta(days=1)
+    return last_day - timedelta(days=(last_day.weekday() - weekday) % 7)
+
+
+def _observed(day: date) -> date:
+    if day.weekday() == _SATURDAY:
+        return day - timedelta(days=1)
+    if day.weekday() == _SUNDAY:
+        return day + timedelta(days=1)
+    return day
 
 
 def _tool_error(message: str) -> str:

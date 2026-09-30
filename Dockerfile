@@ -16,7 +16,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
-COPY sample_docs ./sample_docs
+COPY handbook ./handbook
 RUN uv sync --frozen --no-dev
 
 # Run as a normal user, not root. /app/data holds SQLite, Chroma and uploads;

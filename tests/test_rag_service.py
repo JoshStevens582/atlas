@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,8 +21,7 @@ from atlas.schemas.chat import AnswerCheck, RetrievedChunk
 from atlas.services.answer_cache import AnswerCache
 from atlas.services.answer_check import AnswerChecker
 from atlas.services.embeddings import EmbeddingClient
-from atlas.services.rag import RagChatService
-from atlas.services.tools import ONLY_ONE_TICKET_TOOL
+from atlas.services.rag import MAX_TOOL_CALLS_PER_ROUND, TOO_MANY_TOOL_CALLS, RagChatService
 
 NO_ANSWER = "I could not generate an answer from the retrieved documents."
 LOOP_STOPPED = "The tool loop stopped before a final answer was written."
@@ -76,6 +76,10 @@ def _call(name: str, arguments: str = "{}", call_id: str = "call-1") -> Any:
         arguments=arguments,
         call_id=call_id,
     )
+
+
+def _holidays_call(call_id: str = "call-1") -> Any:
+    return _call("get_federal_holidays", '{"year": 2026}', call_id)
 
 
 class StubOpenAI:
@@ -307,23 +311,24 @@ async def test_run_ask_uses_a_fallback_when_the_model_writes_nothing(
 
 
 @pytest.mark.asyncio
-async def test_run_ask_runs_the_ticket_tool_then_writes_the_answer(
+async def test_run_ask_runs_the_tool_then_writes_the_answer(
     factory: async_sessionmaker[AsyncSession],
 ) -> None:
     openai = StubOpenAI(
         [
-            StubStream([], _final("resp-1", [_call("list_support_tickets")])),
-            StubStream(["Three tickets."], _final("resp-2")),
+            StubStream([], _final("resp-1", [_holidays_call()])),
+            StubStream(["Thanksgiving is on 26 November."], _final("resp-2")),
         ]
     )
     service = _service(factory, openai)
 
-    events = await _ask(service, "List all support tickets")
+    events = await _ask(service, "When is Thanksgiving in 2026?")
 
     tool_events = [event for event in events if event["type"] == "tool"]
-    assert [event["name"] for event in tool_events] == ["list_support_tickets"]
-    assert "T-104" in tool_events[0]["result"]
-    assert events[-1]["answer"] == "Three tickets."
+    assert [event["name"] for event in tool_events] == ["get_federal_holidays"]
+    assert tool_events[0]["arguments"] == {"year": 2026}
+    assert "2026-11-26" in tool_events[0]["result"]
+    assert events[-1]["answer"] == "Thanksgiving is on 26 November."
     second_call = openai.stream_calls[1]
     assert second_call["previous_response_id"] == "resp-1"
     assert second_call["input"] == [
@@ -346,7 +351,7 @@ async def test_run_ask_refuses_a_tool_the_model_made_up_and_keeps_going(
         ]
     )
 
-    events = await _ask(_service(factory, openai), "Delete every ticket")
+    events = await _ask(_service(factory, openai), "Delete everything")
 
     tool_events = [event for event in events if event["type"] == "tool"]
     assert [event["name"] for event in tool_events] == ["delete_everything"]
@@ -355,60 +360,85 @@ async def test_run_ask_refuses_a_tool_the_model_made_up_and_keeps_going(
 
 
 @pytest.mark.asyncio
-async def test_run_ask_turns_a_list_call_into_a_lookup_when_one_ticket_is_named(
+async def test_run_ask_runs_the_leave_tool_with_the_users_numbers(
     factory: async_sessionmaker[AsyncSession],
 ) -> None:
+    leave_call = _call(
+        "estimate_annual_leave",
+        '{"current_hours": 182, "years_of_service": 5, "pay_periods_remaining": 25}',
+    )
     openai = StubOpenAI(
         [
-            StubStream([], _final("resp-1", [_call("list_support_tickets")])),
-            StubStream(["In transit."], _final("resp-2")),
+            StubStream([], _final("resp-1", [leave_call])),
+            StubStream(["You would lose 92 hours."], _final("resp-2")),
         ]
     )
     service = _service(factory, openai)
 
-    events = await _ask(service, "Where is support ticket T-104?")
+    events = await _ask(service, "I have 182 hours, 5 years in, 25 pay periods left.")
 
     tool_events = [event for event in events if event["type"] == "tool"]
-    assert [event["name"] for event in tool_events] == ["get_support_ticket"]
-    assert tool_events[0]["arguments"] == {"ticket_id": "T-104"}
+    assert [event["name"] for event in tool_events] == ["estimate_annual_leave"]
+    assert json.loads(tool_events[0]["result"])["use_or_lose_hours"] == 92
+    assert events[-1]["answer"] == "You would lose 92 hours."
 
 
 @pytest.mark.asyncio
-async def test_run_ask_allows_only_one_ticket_tool_per_ask(
+async def test_run_ask_runs_both_tools_when_the_model_asks_for_both_in_one_step(
     factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    calls = [
-        _call("list_support_tickets", call_id="call-list"),
-        _call("get_support_ticket", '{"ticket_id": "T-201"}', call_id="call-get"),
+    leave_call = _call(
+        "estimate_annual_leave",
+        '{"current_hours": 10, "years_of_service": 1, "pay_periods_remaining": 1}',
+        call_id="call-leave",
+    )
+    openai = StubOpenAI(
+        [
+            StubStream([], _final("resp-1", [leave_call, _holidays_call("call-days")])),
+            StubStream(["Both done."], _final("resp-2")),
+        ]
+    )
+
+    events = await _ask(_service(factory, openai), "Leave and holidays")
+
+    tool_events = [event for event in events if event["type"] == "tool"]
+    assert [event["name"] for event in tool_events] == [
+        "estimate_annual_leave",
+        "get_federal_holidays",
     ]
+    outputs = openai.stream_calls[1]["input"]
+    assert [item["call_id"] for item in outputs] == ["call-leave", "call-days"]
+
+
+@pytest.mark.asyncio
+async def test_run_ask_answers_every_call_but_runs_only_the_first_few_in_one_step(
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    calls = [_holidays_call(f"call-{number}") for number in range(MAX_TOOL_CALLS_PER_ROUND + 2)]
     openai = StubOpenAI(
         [
             StubStream([], _final("resp-1", calls)),
             StubStream(["Done."], _final("resp-2")),
         ]
     )
-    service = _service(factory, openai)
 
-    events = await _ask(service, "Compare our tickets")
+    events = await _ask(_service(factory, openai), "Every holiday for ever")
 
     tool_events = [event for event in events if event["type"] == "tool"]
-    assert [event["name"] for event in tool_events] == ["get_support_ticket"]
+    assert len(tool_events) == MAX_TOOL_CALLS_PER_ROUND
     outputs = openai.stream_calls[1]["input"]
-    assert outputs[1] == {
-        "type": "function_call_output",
-        "call_id": "call-list",
-        "output": ONLY_ONE_TICKET_TOOL,
-    }
+    assert len(outputs) == MAX_TOOL_CALLS_PER_ROUND + 2
+    assert [item["output"] for item in outputs[-2:]] == [TOO_MANY_TOOL_CALLS] * 2
 
 
 @pytest.mark.asyncio
 async def test_run_ask_stops_when_the_response_has_no_id_to_continue_from(
     factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    openai = StubOpenAI([StubStream([], _final("", [_call("list_support_tickets")]))])
+    openai = StubOpenAI([StubStream([], _final("", [_holidays_call()]))])
     service = _service(factory, openai)
 
-    events = await _ask(service, "List all support tickets")
+    events = await _ask(service, "When is Thanksgiving in 2026?")
 
     assert events[-1]["answer"] == LOOP_STOPPED
     assert len(openai.stream_calls) == 1
@@ -420,13 +450,13 @@ async def test_run_ask_stops_when_the_model_keeps_asking_for_tools(
 ) -> None:
     openai = StubOpenAI(
         [
-            StubStream([], _final("resp-1", [_call("list_support_tickets")])),
-            StubStream([], _final("resp-2", [_call("list_support_tickets", call_id="call-2")])),
+            StubStream([], _final("resp-1", [_holidays_call()])),
+            StubStream([], _final("resp-2", [_holidays_call("call-2")])),
         ]
     )
     service = _service(factory, openai, max_tool_rounds=1)
 
-    events = await _ask(service, "List all support tickets")
+    events = await _ask(service, "When is Thanksgiving in 2026?")
 
     assert events[-1]["answer"] == LOOP_STOPPED
     assert len(openai.stream_calls) == 2
@@ -497,13 +527,13 @@ async def test_run_ask_does_not_cache_an_answer_that_used_a_tool(
     cache = StubAnswerCache()
     openai = StubOpenAI(
         [
-            StubStream([], _final("resp-1", [_call("list_support_tickets")])),
-            StubStream(["Three tickets."], _final("resp-2")),
+            StubStream([], _final("resp-1", [_holidays_call()])),
+            StubStream(["Thanksgiving is 26 November."], _final("resp-2")),
         ]
     )
     service = _service(factory, openai, cache=cache)
 
-    await _ask(service, "List all support tickets")
+    await _ask(service, "When is Thanksgiving in 2026?")
 
     assert cache.stored == []
 
@@ -589,13 +619,13 @@ async def test_run_ask_does_not_check_an_answer_that_used_a_tool(
     checker = StubChecker(SUPPORTED)
     openai = StubOpenAI(
         [
-            StubStream([], _final("resp-1", [_call("list_support_tickets")])),
-            StubStream(["Three tickets."], _final("resp-2")),
+            StubStream([], _final("resp-1", [_holidays_call()])),
+            StubStream(["Thanksgiving is 26 November."], _final("resp-2")),
         ]
     )
     service = _service(factory, openai, checker=checker)
 
-    events = await _ask(service, "List all support tickets")
+    events = await _ask(service, "When is Thanksgiving in 2026?")
 
     assert "check" not in _types(events)
     assert checker.calls == []
