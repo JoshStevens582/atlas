@@ -9,7 +9,7 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 **Live demo:** [102-203-81-249.sslip.io](https://102-203-81-249.sslip.io)  
 **Repo:** [github.com/JoshStevens582/atlas](https://github.com/JoshStevens582/atlas)
 
-![Atlas answering "What is the project codename?" with the answer "Northstar [1]" and the matching passage in the Sources used panel](docs/atlas-screenshot.png)
+![Atlas answering "How many annual leave hours can I carry over?" with a cited answer [1], the second-model answer check, and the matching Leave types passage in the Sources used panel](docs/atlas-screenshot.png)
 
 ## Demo script (2 minutes)
 
