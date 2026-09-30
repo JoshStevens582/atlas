@@ -33,10 +33,30 @@ const CHECK_LABELS: Record<AnswerVerdict, string> = {
 };
 
 function displayTitle(title: string): string {
-  return title
-    .replace(/^\d+\s+/, "")
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return title.replace(/^\d+\s+/, "");
+}
+
+const MATCH_LABELS: Record<NonNullable<RetrievedChunk["match"]>, string> = {
+  vector: "Found by meaning",
+  lexical: "Found by keywords",
+  both: "Found by meaning and keywords",
+};
+
+function describeSource(chunk: RetrievedChunk): string {
+  const parts = [`Part ${chunk.chunk_index + 1} of this document`];
+  if (chunk.match) {
+    parts.push(MATCH_LABELS[chunk.match]);
+  }
+  if (chunk.cited === true) {
+    parts.push("Used in the answer");
+  } else if (chunk.cited === false) {
+    parts.push("Not used in the answer");
+  }
+  return parts.join(" · ");
+}
+
+function sourceDetail(chunk: RetrievedChunk): string {
+  return `Technical detail: chunk ${chunk.chunk_index} (counting from 0) · meaning-search distance ${chunk.distance.toFixed(3)} (lower is closer)`;
 }
 
 const SUGGESTIONS = [
@@ -523,13 +543,10 @@ export default function App() {
                     <strong>
                       [{citeN}] {displayTitle(chunk.document_title)}
                     </strong>
-                    <span className="score">
-                      chunk {chunk.chunk_index + 1} · d={chunk.distance.toFixed(3)}
-                      {chunk.match ? ` · ${chunk.match}` : ""}
-                      {chunk.cited === true ? " · in answer" : ""}
-                      {unused ? " · not in answer" : ""}
-                    </span>
                   </header>
+                  <p className="source-meta" title={sourceDetail(chunk)}>
+                    {describeSource(chunk)}
+                  </p>
                   <p>{chunk.text}</p>
                 </article>
               );
