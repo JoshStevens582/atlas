@@ -60,8 +60,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look (no signup), sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or create your own account — signup is real: passwords are bcrypt-hashed and stored in SQLite, not a hardcoded list. Threads are per user. On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick). The files in `sample_docs/` are not in the Library: they are the corpus for the golden-set eval.
-
+Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look (no signup), sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or create your own account — signup is real: passwords are bcrypt-hashed and stored in SQLite, not a hardcoded list. Threads are per user. On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick).
 To wipe everything and re-index the handbook with self-test scores (stop the API first, Chroma and SQLite are not meant for two writers):
 
 ```powershell
@@ -117,7 +116,7 @@ Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (wo
 
 ### Answer check (works on any uploaded document)
 
-The golden-set eval only covers the sample docs. For documents users upload there is no answer key, so every handbook Ask gets a second, separate model call after the answer streams: it reads the question, the answer and the retrieved chunks and returns `supported`, `partly_supported` or `not_supported` with a one-line reason. The Sources panel shows it as a `check` stream event. It is a model judging a model, so it can be wrong, and the UI says so. It is skipped for tool answers and the "not in the handbook" reply, and if the call fails the Ask still succeeds with no verdict. The verdict is cached with the answer. Turn it off with `ANSWER_CHECK_ENABLED=false`; the model is `ANSWER_CHECK_MODEL` (default `gpt-4o-mini`).
+The golden-set eval only covers the handbook pages. For documents users upload there is no answer key, so every handbook Ask gets a second, separate model call after the answer streams: it reads the question, the answer and the retrieved chunks and returns `supported`, `partly_supported` or `not_supported` with a one-line reason. The Sources panel shows it as a `check` stream event. It is a model judging a model, so it can be wrong, and the UI says so. It is skipped for tool answers and the "not in the handbook" reply, and if the call fails the Ask still succeeds with no verdict. The verdict is cached with the answer. Turn it off with `ANSWER_CHECK_ENABLED=false`; the model is `ANSWER_CHECK_MODEL` (default `gpt-4o-mini`).
 
 ### Upload self-test
 

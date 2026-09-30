@@ -71,7 +71,8 @@ def test_instructions_keep_handbook_text_and_calculations_separate() -> None:
     assert "mixed question" in text
     assert "combine both in one reply" in text
     assert "ask the user for it instead of guessing" in text
-    assert "cite it as [1]" in text
+    assert "must end with the number of the source" in text
+    assert "with no [n] is wrong" in text
 
 
 def test_instructions_no_longer_mention_tickets() -> None:
