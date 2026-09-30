@@ -109,6 +109,20 @@ Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (wo
 
 With Redis up, handbook-style Asks cache the finished answer (key = model + instructions + question + retrieved chunks + history). Same Ask again with the same retrieve context → skip the **generate** OpenAI call (retrieve and re-rank still run). Ticket/tool Asks are not cached. TTL default 1 hour (`ANSWER_CACHE_TTL_SECONDS`).
 
+## Deploy with Docker
+
+One server, three containers: **web** (Caddy serves the built React app and forwards `/api`), **api** (FastAPI plus the ingest worker) and **redis**. Only the web container is exposed; the API and Redis are not reachable from outside.
+
+```bash
+cp .env.example .env     # set OPENAI_API_KEY and ATLAS_AUTH_SECRET
+docker compose up -d --build
+```
+
+- Without `SITE_ADDRESS` it serves plain HTTP on port 80.
+- With `SITE_ADDRESS=your.domain` in `.env`, Caddy gets and renews a free HTTPS certificate and redirects HTTP to HTTPS. DNS must point at the server and ports 80 and 443 must be open.
+- Data (SQLite, Chroma, uploads) lives in the `atlas-data` volume and survives rebuilds and restarts.
+- CI builds and starts this stack on every PR and checks it through the front door.
+
 ## Architecture
 
 ```text

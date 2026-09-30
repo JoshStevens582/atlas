@@ -1,0 +1,22 @@
+# Keep secrets, local state and junk out of every image build.
+.env
+.env.*
+!.env.example
+.git
+.github
+.cursor
+.venv
+data
+docs
+tests
+evals
+scripts
+**/__pycache__
+**/*.pyc
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.coverage
+htmlcov
+frontend/node_modules
+frontend/dist
