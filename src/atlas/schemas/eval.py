@@ -24,6 +24,17 @@ class GoldenQuestionSet(BaseModel):
     questions: list[GoldenQuestion] = Field(min_length=1)
 
 
+class PassageQuestion(BaseModel):
+    """One model-written test question and which numbered passage it came from."""
+
+    passage_number: int
+    question: str
+
+
+class PassageQuestions(BaseModel):
+    questions: list[PassageQuestion]
+
+
 class CaseScore(BaseModel):
     question_id: str
     question: str

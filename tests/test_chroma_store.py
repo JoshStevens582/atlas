@@ -93,6 +93,23 @@ def test_list_chunks_returns_everything_marked_as_keyword_candidates(
     assert {chunk.match for chunk in chunks} == {"lexical"}
 
 
+def test_get_document_chunks_returns_one_document_in_reading_order(
+    store: ChromaChunkStore,
+) -> None:
+    store.upsert_chunks("doc-a", "Refunds", ["first", "second", "third"], [NORTH, EAST, UP])
+    store.upsert_chunks("doc-b", "Returns", ["other"], [UP])
+
+    chunks = store.get_document_chunks("doc-a")
+
+    assert [(chunk.chunk_index, chunk.text) for chunk in chunks] == [
+        (0, "first"),
+        (1, "second"),
+        (2, "third"),
+    ]
+    assert {chunk.document_id for chunk in chunks} == {"doc-a"}
+    assert store.get_document_chunks("missing") == []
+
+
 def test_delete_document_removes_only_that_document(store: ChromaChunkStore) -> None:
     _fill(store)
 

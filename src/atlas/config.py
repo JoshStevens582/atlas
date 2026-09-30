@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     rerank_model: str = "gpt-4o-mini"
     answer_check_enabled: bool = True
     answer_check_model: str = "gpt-4o-mini"
+    retrieval_check_enabled: bool = True
+    retrieval_check_model: str = "gpt-4o-mini"
+    retrieval_check_samples: int = 6
     history_window: int = 12
     max_tool_rounds: int = 3
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"

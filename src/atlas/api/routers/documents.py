@@ -57,16 +57,7 @@ async def list_documents(
 ) -> list[DocumentOut]:
     async with session_factory() as session:
         documents = await DocumentRepository(session).list_documents()
-    return [
-        DocumentOut(
-            id=document.id,
-            title=document.title,
-            original_filename=document.original_filename,
-            chunk_count=document.chunk_count,
-            created_at=document.created_at.isoformat(),
-        )
-        for document in documents
-    ]
+    return [DocumentOut.from_document(document) for document in documents]
 
 
 @router.get("/jobs/{job_id}", response_model=IngestJobOut)

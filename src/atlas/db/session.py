@@ -55,10 +55,23 @@ def _ensure_thread_owner_column(connection: Connection) -> None:
     )
 
 
+def _ensure_document_check_columns(connection: Connection) -> None:
+    inspector = inspect(connection)
+    if not inspector.has_table("indexed_documents"):
+        return
+    column_names = {column["name"] for column in inspector.get_columns("indexed_documents")}
+    for column in ("retrieval_check_hits", "retrieval_check_total"):
+        if column not in column_names:
+            connection.execute(
+                text(f"ALTER TABLE indexed_documents ADD COLUMN {column} INTEGER")
+            )
+
+
 async def init_database(engine: AsyncEngine) -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.run_sync(_ensure_thread_owner_column)
+        await connection.run_sync(_ensure_document_check_columns)
 
 
 async def session_iterator(

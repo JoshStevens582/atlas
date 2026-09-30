@@ -30,6 +30,7 @@ from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter
 from atlas.services.redis_client import connect_redis
 from atlas.services.rerank import LlmReranker
+from atlas.services.retrieval_selftest import LlmQuestionWriter, RetrievalSelfTest
 
 
 def _configure_logging() -> None:
@@ -66,7 +67,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     embeddings = EmbeddingClient(openai_client, settings.openai_embedding_model)
     chunk_store = ChromaChunkStore(settings.chroma_path)
-    ingest_service = IngestService(settings, session_factory, chunk_store, embeddings)
 
     redis_client = await connect_redis(settings)
     answer_cache = (
@@ -93,6 +93,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         answer_cache=answer_cache,
         reranker=reranker,
         answer_checker=answer_checker,
+    )
+    retrieval_check = (
+        RetrievalSelfTest(
+            chunk_store,
+            rag_service,
+            LlmQuestionWriter(openai_client, settings.retrieval_check_model),
+            settings.retrieval_check_samples,
+        )
+        if settings.retrieval_check_enabled
+        else None
+    )
+    ingest_service = IngestService(
+        settings, session_factory, chunk_store, embeddings, retrieval_check=retrieval_check
     )
     ingest_queue = (
         IngestQueue(redis_client, settings)

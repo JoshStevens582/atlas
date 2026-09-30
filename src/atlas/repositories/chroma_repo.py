@@ -85,25 +85,15 @@ class ChromaChunkStore:
         if self.count() == 0:
             return []
         results = self._collection.get(include=["documents", "metadatas"])
-        documents = results.get("documents") or []
-        metadatas = results.get("metadatas") or []
-        chunks: list[RetrievedChunk] = []
-        for text, metadata in zip(documents, metadatas, strict=False):
-            if not text or metadata is None:
-                continue
-            raw_index = metadata.get("chunk_index", 0)
-            chunk_index = raw_index if isinstance(raw_index, int) else 0
-            chunks.append(
-                RetrievedChunk(
-                    document_id=str(metadata.get("document_id", "")),
-                    document_title=str(metadata.get("document_title", "Untitled")),
-                    chunk_index=chunk_index,
-                    text=str(text),
-                    distance=1.0,
-                    match="lexical",
-                )
-            )
-        return chunks
+        return _parse_get_results(results)
+
+    def get_document_chunks(self, document_id: str) -> list[RetrievedChunk]:
+        """Every chunk of one document, in reading order."""
+        results = self._collection.get(
+            where={"document_id": document_id},
+            include=["documents", "metadatas"],
+        )
+        return sorted(_parse_get_results(results), key=lambda chunk: chunk.chunk_index)
 
     def delete_document(self, document_id: str) -> None:
         self._collection.delete(where={"document_id": document_id})
@@ -112,6 +102,28 @@ class ChromaChunkStore:
         """Drop every chunk. Used when the corpus was duplicated by re-uploads."""
         self._client.delete_collection(self._collection_name)
         self._collection = self._open_collection()
+
+
+def _parse_get_results(results: Mapping[str, Any]) -> list[RetrievedChunk]:
+    documents = results.get("documents") or []
+    metadatas = results.get("metadatas") or []
+    chunks: list[RetrievedChunk] = []
+    for text, metadata in zip(documents, metadatas, strict=False):
+        if not text or metadata is None:
+            continue
+        raw_index = metadata.get("chunk_index", 0)
+        chunk_index = raw_index if isinstance(raw_index, int) else 0
+        chunks.append(
+            RetrievedChunk(
+                document_id=str(metadata.get("document_id", "")),
+                document_title=str(metadata.get("document_title", "Untitled")),
+                chunk_index=chunk_index,
+                text=str(text),
+                distance=1.0,
+                match="lexical",
+            )
+        )
+    return chunks
 
 
 def _parse_query_results(results: Mapping[str, Any]) -> list[RetrievedChunk]:

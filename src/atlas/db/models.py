@@ -76,6 +76,10 @@ class IndexedDocument(Base):
     title: Mapped[str] = mapped_column(String(300))
     original_filename: Mapped[str] = mapped_column(String(300))
     chunk_count: Mapped[int] = mapped_column(Integer)
+    # Upload-time retrieval self-test: how many generated questions found their
+    # own passage. Both stay NULL when the test did not run.
+    retrieval_check_hits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    retrieval_check_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
