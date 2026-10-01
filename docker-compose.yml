@@ -9,6 +9,10 @@ services:
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
+      # The browser only talks to the web container, which serves the React app
+      # and the API from one address. That is same-origin, so no other website
+      # is allowed to call the API from a browser. Empty = no cross-origin at all.
+      CORS_ORIGINS: ""
     volumes:
       - atlas-data:/app/data
     depends_on:
