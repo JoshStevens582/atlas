@@ -49,7 +49,22 @@ start_api() {
   if [ "$api_stopped" = 1 ]; then
     docker compose start api
     api_stopped=0
+    wait_for_api
   fi
+}
+# `start` returns as soon as the container is running, before the app answers.
+# Wait for its health check so a broken restart fails loudly, not silently.
+wait_for_api() {
+  local status
+  for _ in $(seq 1 40); do
+    status="$(docker inspect --format '{{.State.Health.Status}}' "$api_container")"
+    if [ "$status" = healthy ]; then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "api did not become healthy within 120 seconds." >&2
+  return 1
 }
 trap start_api EXIT
 
@@ -66,9 +81,11 @@ echo "Wrote $backup_dir/$archive_name"
 
 find "$backup_dir" -name 'atlas-data-*.tar.gz' -mtime "+$keep_days" -delete
 
+# --s3-no-check-bucket: the key is limited to this one bucket, so rclone must not
+# try to create it first (that is refused with 403). The bucket already exists.
 docker run --rm --env-file "$env_file" "${rclone_docker_args[@]}" \
   -v "$backup_dir:/backup:ro" "$rclone_image" \
-  copy /backup "$remote" --include 'atlas-data-*.tar.gz'
+  copy /backup "$remote" --include 'atlas-data-*.tar.gz' --s3-no-check-bucket
 docker run --rm --env-file "$env_file" "${rclone_docker_args[@]}" "$rclone_image" \
   delete "$remote" --min-age "${remote_keep_days}d" --include 'atlas-data-*.tar.gz'
 echo "Uploaded to the off-server bucket."
