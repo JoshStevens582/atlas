@@ -66,9 +66,11 @@ echo "Wrote $backup_dir/$archive_name"
 
 find "$backup_dir" -name 'atlas-data-*.tar.gz' -mtime "+$keep_days" -delete
 
+# --s3-no-check-bucket: the key is limited to this one bucket, so rclone must not
+# try to create it first (that is refused with 403). The bucket already exists.
 docker run --rm --env-file "$env_file" "${rclone_docker_args[@]}" \
   -v "$backup_dir:/backup:ro" "$rclone_image" \
-  copy /backup "$remote" --include 'atlas-data-*.tar.gz'
+  copy /backup "$remote" --include 'atlas-data-*.tar.gz' --s3-no-check-bucket
 docker run --rm --env-file "$env_file" "${rclone_docker_args[@]}" "$rclone_image" \
   delete "$remote" --min-age "${remote_keep_days}d" --include 'atlas-data-*.tar.gz'
 echo "Uploaded to the off-server bucket."
