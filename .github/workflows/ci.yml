@@ -89,6 +89,26 @@ jobs:
           token=$(curl -fsS -X POST http://localhost/api/auth/demo | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
           curl -fsS -H "Authorization: Bearer $token" http://localhost/api/threads
 
+      - name: Backup, upload and restore round trip
+        # The "bucket" here is a local folder (rclone's :local: backend), so no
+        # account or keys are needed. Everything else is the real code path.
+        run: |
+          mkdir -p /tmp/offsite
+          echo "BACKUP_REMOTE=:local:/offsite" > /tmp/backup.env
+          BACKUP_DIR=/tmp/backups BACKUP_ENV_FILE=/tmp/backup.env \
+            RCLONE_DOCKER_ARGS="-v /tmp/offsite:/offsite" deploy/backup.sh
+          archive=$(ls /tmp/offsite/atlas-data-*.tar.gz | head -n 1)
+          deploy/restore.sh "$archive" --into ci_restore_check
+          docker compose run --rm --no-deps -T -v ci_restore_check:/app/data api python - <<'PY'
+          import sqlite3
+          db = sqlite3.connect("/app/data/atlas.db")
+          assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+          users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+          assert users >= 1, users
+          print("restored database is intact, users:", users)
+          PY
+          curl -fsS http://localhost/api/health
+
       - name: Show logs if anything failed
         if: failure()
         run: docker compose logs --no-color
