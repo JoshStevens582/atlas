@@ -4,6 +4,25 @@
 #                         redirects HTTP to HTTPS. Needs DNS pointing at this
 #                         server and ports 80 and 443 open.
 {$SITE_ADDRESS::80} {
+	# Security headers on every response (the React app and the API).
+	# - Strict-Transport-Security: after one visit over HTTPS, the browser
+	#   refuses plain HTTP to this site for a year. Ignored over plain HTTP.
+	# - X-Content-Type-Options: the browser must trust the declared file type.
+	# - X-Frame-Options + frame-ancestors: no other site may put Atlas in a frame.
+	# - Referrer-Policy: do not tell other sites which Atlas page you came from.
+	# - Permissions-Policy: Atlas never needs the camera, microphone or location.
+	# - Content-Security-Policy: scripts and connections only from this site.
+	#   Styles and fonts also come from Google Fonts (see frontend/index.html).
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+
 	# API: one front door. flush_interval -1 sends each streamed token to the
 	# browser immediately instead of buffering the answer.
 	handle /api/* {
