@@ -49,7 +49,22 @@ start_api() {
   if [ "$api_stopped" = 1 ]; then
     docker compose start api
     api_stopped=0
+    wait_for_api
   fi
+}
+# `start` returns as soon as the container is running, before the app answers.
+# Wait for its health check so a broken restart fails loudly, not silently.
+wait_for_api() {
+  local status
+  for _ in $(seq 1 40); do
+    status="$(docker inspect --format '{{.State.Health.Status}}' "$api_container")"
+    if [ "$status" = healthy ]; then
+      return 0
+    fi
+    sleep 3
+  done
+  echo "api did not become healthy within 120 seconds." >&2
+  return 1
 }
 trap start_api EXIT
 
