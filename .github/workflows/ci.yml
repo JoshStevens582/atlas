@@ -72,6 +72,15 @@ jobs:
       - name: React app is served
         run: curl -fsS http://localhost/ | grep -q 'id="root"'
 
+      - name: Security headers are sent on the app and on the API
+        run: |
+          for url in http://localhost/ http://localhost/api/health; do
+            headers=$(curl -fsS -D - -o /dev/null "$url" | tr -d '\r')
+            for name in strict-transport-security x-content-type-options x-frame-options referrer-policy permissions-policy content-security-policy; do
+              echo "$headers" | grep -qi "^$name:" || { echo "missing $name on $url"; exit 1; }
+            done
+          done
+
       - name: Unknown page falls back to the React app
         run: curl -fsS http://localhost/some/client/route | grep -q 'id="root"'
 
