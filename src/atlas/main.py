@@ -164,6 +164,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await engine.dispose()
 
 
+# Only what the React app actually sends. Anything else is refused at the preflight.
+CORS_ALLOWED_METHODS = ["GET", "POST", "DELETE"]
+CORS_ALLOWED_HEADERS = ["Authorization", "Content-Type"]
+
 app = FastAPI(
     title="Atlas",
     description="Grounded RAG chat with citations and a Sources used panel.",
@@ -174,8 +178,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=load_settings().cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=CORS_ALLOWED_METHODS,
+    allow_headers=CORS_ALLOWED_HEADERS,
 )
 app.include_router(health_router)
 app.include_router(auth_router)
