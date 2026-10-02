@@ -29,8 +29,10 @@ USER atlas
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8787
 
+# Ready, not live: do not mark this container healthy until Redis and the
+# database answer. urllib raises on 503, so a failed probe is a failed check.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/ready')"
 
 # --forwarded-allow-ips "*": behind the proxy every request arrives from the
 # proxy's address. Trusting X-Forwarded-For lets rate limits see the real client.

@@ -90,3 +90,17 @@ class HealthOut(BaseModel):
     vector_store: str
     document_count: int
     chunk_count: int
+
+
+class LiveOut(BaseModel):
+    """Process is up. Used to decide whether to restart the container."""
+
+    status: Literal["ok"]
+
+
+class ReadyOut(BaseModel):
+    """Database and Redis can take work. Used to decide whether to send traffic."""
+
+    status: Literal["ok", "unavailable"]
+    database: Literal["ok", "unavailable"]
+    redis: Literal["ok", "unavailable"]

@@ -47,6 +47,7 @@ services:
       - caddy-config:/config
     depends_on:
       api:
+        # Dockerfile HEALTHCHECK hits /api/ready (Redis + database), not /api/live.
         condition: service_healthy
     restart: unless-stopped
 

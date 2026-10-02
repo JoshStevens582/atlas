@@ -66,8 +66,11 @@ jobs:
       - name: Build and start the stack
         run: docker compose up -d --build --wait --wait-timeout 180
 
-      - name: Health check through the web proxy
-        run: curl -fsS http://localhost/api/health
+      - name: Health probes through the web proxy
+        run: |
+          curl -fsS http://localhost/api/live
+          curl -fsS http://localhost/api/ready
+          curl -fsS http://localhost/api/health
 
       - name: React app is served
         run: curl -fsS http://localhost/ | grep -q 'id="root"'
@@ -107,7 +110,7 @@ jobs:
           assert users >= 1, users
           print("restored database is intact, users:", users)
           PY
-          curl -fsS http://localhost/api/health
+          curl -fsS http://localhost/api/ready
 
       - name: Show logs if anything failed
         if: failure()
