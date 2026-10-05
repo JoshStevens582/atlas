@@ -81,13 +81,25 @@ const SUGGESTIONS = [
   },
 ];
 
+function resetTokenFromLocation(): string | null {
+  return new URLSearchParams(window.location.search).get("reset_token");
+}
+
 export default function App() {
-  const [signedIn, setSignedIn] = useState(hasSession());
+  const [signedIn, setSignedIn] = useState(() => {
+    if (resetTokenFromLocation()) {
+      logout();
+      return false;
+    }
+    return hasSession();
+  });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot" | "reset">("login");
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot" | "reset">(() =>
+    resetTokenFromLocation() ? "reset" : "login",
+  );
   const [email, setEmail] = useState("");
-  const [resetToken, setResetToken] = useState("");
+  const [resetToken, setResetToken] = useState(() => resetTokenFromLocation() ?? "");
   const [forgotNotice, setForgotNotice] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -119,9 +131,11 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get("reset_token");
     if (tokenFromUrl) {
+      logout();
       setResetToken(tokenFromUrl);
       setAuthMode("reset");
       setSignedIn(false);
+      setError(null);
     }
   }, []);
 
@@ -266,7 +280,7 @@ export default function App() {
         return;
       }
       if (authMode === "reset") {
-        await resetPassword(resetToken.trim(), password);
+        await resetPassword(resetToken.trim(), password.trim());
         setAuthMode("login");
         setResetToken("");
         setPassword("");

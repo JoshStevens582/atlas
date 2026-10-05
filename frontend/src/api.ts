@@ -18,14 +18,46 @@ function authHeaders(extra?: HeadersInit): Headers {
   return headers;
 }
 
+function formatApiDetail(detail: unknown): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (item && typeof item === "object" && "msg" in item) {
+          const loc =
+            "loc" in item && Array.isArray(item.loc) ? item.loc.filter(Boolean).join(".") : "";
+          const msg = String((item as { msg: unknown }).msg);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(item);
+      })
+      .join(" ");
+  }
+  if (detail && typeof detail === "object") {
+    return JSON.stringify(detail);
+  }
+  return "Request failed.";
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   if (response.status === 401) {
     sessionStorage.removeItem(TOKEN_KEY);
-    throw new Error("Not authenticated.");
+    const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+    const message =
+      body?.detail !== undefined && body?.detail !== null
+        ? formatApiDetail(body.detail)
+        : "Not authenticated.";
+    throw new Error(message);
   }
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(body?.detail ?? `Request failed (${response.status})`);
+    const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+    const message =
+      body?.detail !== undefined && body?.detail !== null
+        ? formatApiDetail(body.detail)
+        : `Request failed (${response.status})`;
+    throw new Error(message);
   }
   return (await response.json()) as T;
 }
