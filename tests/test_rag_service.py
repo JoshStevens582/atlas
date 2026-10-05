@@ -1,6 +1,5 @@
 import json
 from collections.abc import AsyncIterator, Sequence
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -162,11 +161,6 @@ class StubChecker:
 
 
 SUPPORTED = AnswerCheck(verdict="supported", reason="Source [1] names Northstar.")
-
-
-@pytest.fixture(autouse=True)
-def _trace_log_in_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("atlas.services.observability._TRACE_LOG_PATH", tmp_path / "ask.log")
 
 
 @pytest.fixture

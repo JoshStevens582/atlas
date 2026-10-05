@@ -21,17 +21,15 @@ from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
 from atlas.services.ingest_worker import run_worker_loop
+from atlas.services.logging_setup import configure_logging, shutdown_logging
 from atlas.services.redis_client import connect_redis
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-)
 logger = logging.getLogger("atlas.ingest_worker_cli")
 
 
 async def _run() -> None:
     settings = load_settings()
+    configure_logging(settings)
     redis = await connect_redis(settings)
     if redis is None:
         raise SystemExit(
@@ -68,9 +66,10 @@ async def _run() -> None:
         # Backs off and retries on Redis errors instead of crash-looping.
         await run_worker_loop(queue, ingest, stop=stop, poll_timeout_seconds=2)
     finally:
+        logger.info("ingest worker stopped")
         await redis.aclose()
         await engine.dispose()
-        logger.info("ingest worker stopped")
+        shutdown_logging()
 
 
 def main() -> None:

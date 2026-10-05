@@ -1,11 +1,9 @@
 import logging
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
-from atlas.services import observability
 from atlas.services.observability import AskTrace
 
 
@@ -17,17 +15,14 @@ def _response(**usage: Any) -> SimpleNamespace:
     return SimpleNamespace(usage=SimpleNamespace(**usage))
 
 
-def test_a_trace_line_that_cannot_be_written_is_logged_not_raised(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+def test_emit_logs_structured_event_without_raising(
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    blocker = tmp_path / "not-a-folder"
-    blocker.write_text("a file where the log folder should be", encoding="utf-8")
-    monkeypatch.setattr(observability, "_TRACE_LOG_PATH", blocker / "ask_traces.log")
+    trace = _trace()
+    with caplog.at_level(logging.INFO, logger="atlas.ask"):
+        trace.record_retrieve([])
 
-    with caplog.at_level(logging.ERROR, logger="atlas.ask"):
-        observability._write_trace_line("ask_retrieve {}")
-
-    assert "failed to write ask trace log" in caplog.text
+    assert "ask_retrieve" in caplog.text
 
 
 def test_a_response_without_usage_changes_nothing() -> None:

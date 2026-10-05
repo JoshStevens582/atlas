@@ -141,13 +141,19 @@ async def test_startup_with_auth_turned_off_does_not_seed_demo_users(
         assert await _user_count() == 0
 
 
-def test_ask_logger_is_configured_once() -> None:
-    ask_logger = logging.getLogger("atlas.ask")
-    ask_logger.handlers.clear()
+def test_atlas_logging_is_configured_once() -> None:
+    from atlas.services.logging_setup import configure_logging, shutdown_logging
 
-    main._configure_logging()
-    main._configure_logging()
+    shutdown_logging()
+    from atlas.config import load_settings
 
-    assert len(ask_logger.handlers) == 1
-    assert ask_logger.level == logging.INFO
-    assert ask_logger.propagate is False
+    settings = load_settings()
+
+    configure_logging(settings)
+    configure_logging(settings)
+
+    atlas_logger = logging.getLogger("atlas")
+    assert len(atlas_logger.handlers) == 1
+    assert atlas_logger.level == logging.INFO
+    assert atlas_logger.propagate is False
+    shutdown_logging()
