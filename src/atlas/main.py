@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,6 +25,7 @@ from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
 from atlas.services.ingest_worker import run_worker_loop
+from atlas.services.logging_setup import configure_logging, shutdown_logging
 from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter
 from atlas.services.redis_client import connect_redis
@@ -33,25 +33,10 @@ from atlas.services.rerank import LlmReranker
 from atlas.services.retrieval_selftest import LlmQuestionWriter, RetrievalSelfTest
 
 
-def _configure_logging() -> None:
-    """Ensure Ask traces show in the API terminal (uvicorn may already own root)."""
-    ask_logger = logging.getLogger("atlas.ask")
-    ask_logger.setLevel(logging.INFO)
-    if ask_logger.handlers:
-        return
-    handler = logging.StreamHandler()
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
-    )
-    ask_logger.addHandler(handler)
-    ask_logger.propagate = False
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    _configure_logging()
     settings = load_settings()
+    configure_logging(settings)
     require_secure_auth_secret(settings)
     Path("data").mkdir(exist_ok=True)
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
@@ -162,6 +147,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if redis_client is not None:
         await redis_client.aclose()
     await engine.dispose()
+    shutdown_logging()
 
 
 # Only what the React app actually sends. Anything else is refused at the preflight.

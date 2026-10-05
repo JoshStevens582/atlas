@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     rate_limit_ask_global_per_day: int = 200
     answer_cache_enabled: bool = True
     answer_cache_ttl_seconds: int = 60 * 60
+    log_level: str = "INFO"
+    log_json: bool = True
+    log_file_enabled: bool = True
+    log_file_path: str = "./data/logs/atlas.jsonl"
+    log_file_max_bytes: int = 10 * 1024 * 1024
+    log_file_backup_count: int = 5
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
