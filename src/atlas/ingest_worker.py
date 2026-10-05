@@ -22,7 +22,7 @@ from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
 from atlas.services.ingest_worker import run_worker_loop
 from atlas.services.logging_setup import configure_logging, shutdown_logging
-from atlas.services.redis_client import connect_redis
+from atlas.services.redis_client import RedisRequiredError, connect_redis
 
 logger = logging.getLogger("atlas.ingest_worker_cli")
 
@@ -30,11 +30,13 @@ logger = logging.getLogger("atlas.ingest_worker_cli")
 async def _run() -> None:
     settings = load_settings()
     configure_logging(settings)
-    redis = await connect_redis(settings)
+    try:
+        redis = await connect_redis(settings)
+    except RedisRequiredError as exc:
+        raise SystemExit(str(exc)) from exc
     if redis is None:
         raise SystemExit(
-            "Redis is required for the ingest worker. "
-            "Start Redis and set REDIS_URL, or enable ingest_queue."
+            "Redis is required for the ingest worker. Start Redis and set REDIS_URL."
         )
 
     engine = create_engine(settings)

@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     atlas_auth_secret: str = "dev-only-change-me"
     atlas_demo_users: str = "alice:atlas-alice|bob:atlas-bob"
     redis_url: str = "redis://127.0.0.1:6379/0"
+    # Laptop default: start without Redis (sync upload, no cache, rate limits 503).
+    # docker-compose sets this true so the API refuses to start until Redis answers.
+    redis_required: bool = False
     ingest_queue_enabled: bool = True
     ingest_worker_embedded: bool = True
     ingest_job_ttl_seconds: int = 60 * 60 * 24

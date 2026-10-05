@@ -90,7 +90,7 @@ With Redis up, the API runs an **embedded worker** by default so one `uvicorn` i
 uv run python -m atlas.ingest_worker
 ```
 
-If Redis is down, Atlas falls back to **synchronous** ingest (same as before) and logs a warning. App rate limits are also skipped until Redis is back.
+If Redis is down on a laptop (`REDIS_REQUIRED` false, the default), Atlas still starts and logs a warning: uploads run in the request, the answer cache is off, and rate-limited routes return **503** (limits stay fail-closed). On the server, compose sets `REDIS_REQUIRED=true`, so the API refuses to start until Redis answers. After that, `/api/ready` keeps pinging Redis. See `docs/redis.md`.
 
 ### Rate limits (cost control)
 
