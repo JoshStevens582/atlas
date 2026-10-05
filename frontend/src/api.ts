@@ -53,8 +53,39 @@ export function login(username: string, password: string): Promise<string> {
   return loginRequest("/api/auth/login", { username, password });
 }
 
-export function signup(username: string, password: string): Promise<string> {
-  return loginRequest("/api/auth/signup", { username, password });
+export function signup(
+  username: string,
+  password: string,
+  email?: string,
+): Promise<string> {
+  const body: { username: string; password: string; email?: string } = { username, password };
+  const trimmed = email?.trim();
+  if (trimmed) {
+    body.email = trimmed;
+  }
+  return loginRequest("/api/auth/signup", body);
+}
+
+export async function forgotPassword(username: string): Promise<{
+  message: string;
+  dev_reset_token?: string | null;
+}> {
+  const response = await fetch("/api/auth/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username }),
+  });
+  return readJson<{ message: string; dev_reset_token?: string | null }>(response);
+}
+
+export async function resetPassword(token: string, password: string): Promise<string> {
+  const response = await fetch("/api/auth/reset-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+  const parsed = await readJson<{ message: string }>(response);
+  return parsed.message;
 }
 
 /** One click, no typing: logs in as the seeded demo account. */

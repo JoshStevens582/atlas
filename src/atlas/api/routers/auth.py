@@ -4,11 +4,20 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from atlas.api.deps import (
     enforce_demo_rate_limit,
+    enforce_forgot_password_rate_limit,
     enforce_login_rate_limit,
     enforce_signup_rate_limit,
 )
-from atlas.schemas.auth import LoginRequest, SignupRequest, TokenOut
+from atlas.schemas.auth import (
+    ForgotPasswordRequest,
+    LoginRequest,
+    MessageOut,
+    ResetPasswordRequest,
+    SignupRequest,
+    TokenOut,
+)
 from atlas.services.auth import AuthError, authenticate_user, issue_access_token, signup_user
+from atlas.services.password_reset import request_password_reset, reset_password_with_token
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -33,7 +42,10 @@ async def signup(
     settings = request.app.state.settings
     try:
         username = await signup_user(
-            request.app.state.session_factory, payload.username, payload.password
+            request.app.state.session_factory,
+            payload.username,
+            payload.password,
+            email=payload.email,
         )
     except AuthError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -86,3 +98,37 @@ async def demo_login(
             detail="Demo account is not available.",
         )
     return TokenOut(access_token=issue_access_token(settings, username), username=username)
+
+
+@router.post("/forgot-password", response_model=MessageOut)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    _: Annotated[None, Depends(enforce_forgot_password_rate_limit)],
+) -> MessageOut:
+    """Always the same message — do not reveal whether the username exists."""
+    _require_auth_secret(request)
+    result = await request_password_reset(
+        request.app.state.session_factory,
+        request.app.state.settings,
+        username=payload.username,
+    )
+    return MessageOut(message=result.message, dev_reset_token=result.dev_reset_token)
+
+
+@router.post("/reset-password", response_model=MessageOut)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    _: Annotated[None, Depends(enforce_login_rate_limit)],
+) -> MessageOut:
+    _require_auth_secret(request)
+    try:
+        await reset_password_with_token(
+            request.app.state.session_factory,
+            raw_token=payload.token,
+            new_password=payload.password,
+        )
+    except AuthError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return MessageOut(message="Password updated. You can sign in with the new password.")

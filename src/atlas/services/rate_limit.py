@@ -47,7 +47,7 @@ class RateLimiter:
         """
         if not subject.strip():
             raise ValueError("subject is required for rate limiting.")
-        if bucket not in {"ask", "upload", "login", "signup", "demo"}:
+        if bucket not in {"ask", "upload", "login", "signup", "demo", "forgot_password"}:
             raise ValueError(f"Unknown rate-limit bucket '{bucket}'.")
 
         minute_limit, daily_limit = _limits_for_bucket(self._settings, bucket)
@@ -118,6 +118,11 @@ def _limits_for_bucket(settings: Settings, bucket: str) -> tuple[int, int]:
         return settings.rate_limit_signup_per_minute, settings.rate_limit_signup_per_day
     if bucket == "demo":
         return settings.rate_limit_demo_per_minute, settings.rate_limit_demo_per_day
+    if bucket == "forgot_password":
+        return (
+            settings.rate_limit_forgot_password_per_minute,
+            settings.rate_limit_forgot_password_per_day,
+        )
     raise ValueError(f"Unknown rate-limit bucket '{bucket}'.")
 
 
