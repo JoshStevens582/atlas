@@ -7,9 +7,11 @@ import {
   fetchThread,
   fetchThreads,
   hasSession,
+  forgotPassword,
   login,
   loginAsDemo,
   logout,
+  resetPassword,
   signup,
   streamChat,
   uploadDocument,
@@ -83,7 +85,10 @@ export default function App() {
   const [signedIn, setSignedIn] = useState(hasSession());
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot" | "reset">("login");
+  const [email, setEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [forgotNotice, setForgotNotice] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -109,6 +114,16 @@ export default function App() {
     setThreads(nextThreads);
     setDocuments(nextDocuments);
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tokenFromUrl = params.get("reset_token");
+    if (tokenFromUrl) {
+      setResetToken(tokenFromUrl);
+      setAuthMode("reset");
+      setSignedIn(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!signedIn) {
@@ -235,15 +250,48 @@ export default function App() {
     setError(null);
     try {
       if (authMode === "signup") {
-        await signup(username.trim(), password);
-      } else {
-        await login(username.trim(), password);
+        await signup(username.trim(), password, email);
+        setPassword("");
+        setEmail("");
+        setSignedIn(true);
+        return;
       }
+      if (authMode === "forgot") {
+        const result = await forgotPassword(username.trim());
+        setForgotNotice(result.message);
+        if (result.dev_reset_token) {
+          setResetToken(result.dev_reset_token);
+          setAuthMode("reset");
+        }
+        return;
+      }
+      if (authMode === "reset") {
+        await resetPassword(resetToken.trim(), password);
+        setAuthMode("login");
+        setResetToken("");
+        setPassword("");
+        setForgotNotice("Password updated. Sign in with your new password.");
+        return;
+      }
+      await login(username.trim(), password);
       setPassword("");
       setSignedIn(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Sign-in failed.");
     }
+  }
+
+  function authHeading(): string {
+    if (authMode === "signup") {
+      return "Create an account";
+    }
+    if (authMode === "forgot") {
+      return "Reset your password";
+    }
+    if (authMode === "reset") {
+      return "Choose a new password";
+    }
+    return "Sign in to your threads";
   }
 
   async function onDemoLogin() {
@@ -296,53 +344,131 @@ export default function App() {
         <form className="panel login-card" onSubmit={(event) => void onLogin(event)}>
           <div className="brand">
             <strong>ATLAS</strong>
-            <span>{authMode === "signup" ? "Create an account" : "Sign in to your threads"}</span>
+            <span>{authHeading()}</span>
           </div>
-          <button
-            type="button"
-            className="new-chat"
-            onClick={() => void onDemoLogin()}
-            disabled={demoLoading}
-          >
-            {demoLoading ? "Signing in..." : "Continue as demo user"}
-          </button>
-          <p className="login-copy">
-            No signup needed — one click, browses as a real seeded account.
-            Each user only sees their own threads.
-          </p>
-          <label>
-            Username
-            <input
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              autoComplete={authMode === "signup" ? "new-password" : "current-password"}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
+          {authMode === "login" || authMode === "signup" ? (
+            <>
+              <button
+                type="button"
+                className="new-chat"
+                onClick={() => void onDemoLogin()}
+                disabled={demoLoading}
+              >
+                {demoLoading ? "Signing in..." : "Continue as demo user"}
+              </button>
+              <p className="login-copy">
+                No signup needed — one click, browses as a real seeded account.
+                Each user only sees their own threads.
+              </p>
+            </>
+          ) : null}
+          {authMode === "login" || authMode === "signup" || authMode === "forgot" ? (
+            <label>
+              Username
+              <input
+                autoComplete="username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </label>
+          ) : null}
+          {authMode === "signup" ? (
+            <label>
+              Email (optional — needed to reset password later)
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+          ) : null}
+          {authMode === "reset" ? (
+            <label>
+              Reset token
+              <input
+                value={resetToken}
+                onChange={(event) => setResetToken(event.target.value)}
+              />
+            </label>
+          ) : null}
+          {authMode !== "forgot" ? (
+            <label>
+              Password
+              <input
+                type="password"
+                autoComplete={
+                  authMode === "signup" || authMode === "reset" ? "new-password" : "current-password"
+                }
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+          ) : null}
           {authMode === "signup" ? (
             <p className="login-copy">Passwords are bcrypt-hashed — 8 characters minimum.</p>
           ) : null}
+          {authMode === "forgot" ? (
+            <p className="login-copy">
+              Enter your username. If the account has an email on file, we send a reset link.
+            </p>
+          ) : null}
+          {forgotNotice ? <p className="login-copy">{forgotNotice}</p> : null}
           {error ? <p className="error">{error}</p> : null}
-          <button className="send" disabled={!username.trim() || !password} type="submit">
-            {authMode === "signup" ? "Create account" : "Sign in"}
+          <button
+            className="send"
+            disabled={
+              authMode === "forgot"
+                ? !username.trim()
+                : authMode === "reset"
+                  ? !resetToken.trim() || !password
+                  : !username.trim() || !password
+            }
+            type="submit"
+          >
+            {authMode === "signup"
+              ? "Create account"
+              : authMode === "forgot"
+                ? "Send reset link"
+                : authMode === "reset"
+                  ? "Update password"
+                  : "Sign in"}
           </button>
+          {authMode === "login" ? (
+            <button
+              type="button"
+              className="new-chat"
+              onClick={() => {
+                setError(null);
+                setForgotNotice(null);
+                setAuthMode("forgot");
+              }}
+            >
+              Forgot password?
+            </button>
+          ) : null}
           <button
             type="button"
             className="new-chat"
             onClick={() => {
               setError(null);
-              setAuthMode((mode) => (mode === "signup" ? "login" : "signup"));
+              if (authMode === "login") {
+                setAuthMode("signup");
+                return;
+              }
+              if (authMode === "signup") {
+                setAuthMode("login");
+                return;
+              }
+              setForgotNotice(null);
+              setAuthMode("login");
             }}
           >
-            {authMode === "signup" ? "Have an account? Sign in" : "New here? Create an account"}
+            {authMode === "signup"
+              ? "Have an account? Sign in"
+              : authMode === "login"
+                ? "New here? Create an account"
+                : "Back to sign in"}
           </button>
         </form>
       </div>

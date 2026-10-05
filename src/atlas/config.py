@@ -63,7 +63,19 @@ class Settings(BaseSettings):
     rate_limit_login_per_day: int = 100
     rate_limit_signup_per_day: int = 20
     rate_limit_demo_per_day: int = 200
+    rate_limit_forgot_password_per_minute: int = 5
+    rate_limit_forgot_password_per_day: int = 20
     rate_limit_ask_global_per_day: int = 200
+    app_public_url: str = ""
+    password_reset_ttl_seconds: int = 60 * 60
+    # Local dev without SMTP: return the reset token in the JSON response.
+    password_reset_expose_token_in_response: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
     answer_cache_enabled: bool = True
     answer_cache_ttl_seconds: int = 60 * 60
     log_level: str = "INFO"

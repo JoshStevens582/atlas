@@ -19,8 +19,27 @@ class UserRepository:
         result = await self._session.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
-    async def create(self, username: str, password_hash: str) -> User:
-        user = User(id=str(uuid4()), username=username, password_hash=password_hash)
+    async def get_by_email(self, email: str) -> User | None:
+        normalized = email.strip().lower()
+        if not normalized:
+            return None
+        result = await self._session.execute(select(User).where(User.email == normalized))
+        return result.scalar_one_or_none()
+
+    async def create(
+        self,
+        username: str,
+        password_hash: str,
+        *,
+        email: str | None = None,
+    ) -> User:
+        normalized_email = email.strip().lower() if email and email.strip() else None
+        user = User(
+            id=str(uuid4()),
+            username=username,
+            password_hash=password_hash,
+            email=normalized_email,
+        )
         self._session.add(user)
         try:
             await self._session.commit()
@@ -32,3 +51,10 @@ class UserRepository:
             raise UsernameTakenError(f"Username '{username}' is already taken.") from exc
         await self._session.refresh(user)
         return user
+
+    async def update_password_hash(self, user_id: str, password_hash: str) -> None:
+        user = await self._session.get(User, user_id)
+        if user is None:
+            return
+        user.password_hash = password_hash
+        await self._session.commit()

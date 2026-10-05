@@ -74,6 +74,10 @@ async def enforce_demo_rate_limit(request: Request) -> None:
     await _enforce_bucket(request, subject=_client_ip(request), bucket="demo")
 
 
+async def enforce_forgot_password_rate_limit(request: Request) -> None:
+    await _enforce_bucket(request, subject=_client_ip(request), bucket="forgot_password")
+
+
 def _client_ip(request: Request) -> str:
     if request.client is not None and request.client.host:
         return request.client.host

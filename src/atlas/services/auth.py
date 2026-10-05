@@ -58,6 +58,8 @@ async def signup_user(
     session_factory: async_sessionmaker[AsyncSession],
     username: str,
     password: str,
+    *,
+    email: str | None = None,
 ) -> str:
     username = username.strip()
     if len(username) < MIN_USERNAME_LENGTH:
@@ -65,13 +67,17 @@ async def signup_user(
     if len(password) < MIN_PASSWORD_LENGTH:
         raise AuthError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
 
+    normalized_email = email.strip().lower() if email and email.strip() else None
+
     password_hash = hash_password(password)
     async with session_factory() as session:
         repo = UserRepository(session)
         if await repo.get_by_username(username) is not None:
             raise AuthError(f"Username '{username}' is already taken.")
+        if normalized_email is not None and await repo.get_by_email(normalized_email) is not None:
+            raise AuthError("That email is already in use.")
         try:
-            user = await repo.create(username, password_hash)
+            user = await repo.create(username, password_hash, email=normalized_email)
         except UsernameTakenError as exc:
             raise AuthError(str(exc)) from exc
     return user.username
