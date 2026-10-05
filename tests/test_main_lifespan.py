@@ -13,6 +13,7 @@ from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
 from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter
+from atlas.services.redis_client import RedisRequiredError
 
 GOOD_AUTH_KEY = "lifespan-test-atlas-api-key-32-bytes-or-more"
 
@@ -116,6 +117,23 @@ async def test_startup_with_key_and_redis_seeds_the_demo_note_and_runs_then_stop
         assert redis.closed is False
 
     assert redis.closed is True
+
+
+@pytest.mark.asyncio
+async def test_startup_does_not_swallow_a_required_redis_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def redis_down(_settings: Settings) -> Any:
+        raise RedisRequiredError(
+            "Redis is required but did not answer the startup ping."
+        )
+
+    monkeypatch.setattr(main, "load_settings", lambda: _settings(tmp_path, redis_required=True))
+    monkeypatch.setattr(main, "connect_redis", redis_down)
+
+    with pytest.raises(RedisRequiredError, match="Redis is required"):
+        async with main.lifespan(main.app):
+            pass
 
 
 @pytest.mark.asyncio

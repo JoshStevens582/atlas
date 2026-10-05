@@ -5,7 +5,7 @@ import pytest
 
 from atlas.config import Settings
 from atlas.services import redis_client
-from atlas.services.redis_client import connect_redis
+from atlas.services.redis_client import RedisRequiredError, connect_redis
 
 
 class FakeRedis:
@@ -61,3 +61,19 @@ async def test_connect_redis_returns_none_closes_client_and_warns_when_ping_fail
     assert client is None
     assert FakeRedis.instances[0].closed is True
     assert "Redis unavailable" in caplog.text
+    assert "503" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_connect_redis_refuses_to_start_when_redis_is_required(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    FakeRedis.next_ping_error = ConnectionError("connection refused")
+
+    with caplog.at_level(logging.ERROR, logger="atlas.redis"):
+        with pytest.raises(RedisRequiredError, match="Redis is required"):
+            await connect_redis(Settings(redis_required=True))
+
+    assert FakeRedis.instances[0].closed is True
+    assert "Redis required but unavailable" in caplog.text
+    assert "connection refused" not in caplog.text
