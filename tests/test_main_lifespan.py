@@ -11,6 +11,7 @@ from atlas.config import InsecureAuthSecretError, Settings
 from atlas.db.models import User
 from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
+from atlas.services.login_lockout import LoginLockout
 from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter
 from atlas.services.redis_client import RedisRequiredError
@@ -75,6 +76,7 @@ async def test_startup_without_redis_builds_the_app_and_skips_queue_and_limits(
         assert state.settings is settings
         assert state.ingest_queue is None
         assert state.rate_limiter is None
+        assert state.login_lockout is None
         assert state.redis_client is None
         assert (tmp_path / "uploads").is_dir()
         assert (tmp_path / "chroma").is_dir()
@@ -92,6 +94,7 @@ async def test_startup_with_redis_builds_queue_and_limiter_and_closes_redis_on_s
     async with main.lifespan(main.app):
         assert isinstance(main.app.state.ingest_queue, IngestQueue)
         assert isinstance(main.app.state.rate_limiter, RateLimiter)
+        assert isinstance(main.app.state.login_lockout, LoginLockout)
         assert redis.closed is False
 
     assert redis.closed is True

@@ -14,6 +14,7 @@ from email.message import EmailMessage
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atlas.config import Settings
+from atlas.db.models import User
 from atlas.repositories.password_reset_repo import PasswordResetRepository
 from atlas.repositories.user_repo import UserRepository
 from atlas.services.auth import MIN_PASSWORD_LENGTH, AuthError, hash_password
@@ -87,7 +88,7 @@ async def reset_password_with_token(
     *,
     raw_token: str,
     new_password: str,
-) -> None:
+) -> str:
     if len(new_password) < MIN_PASSWORD_LENGTH:
         raise AuthError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
 
@@ -98,11 +99,14 @@ async def reset_password_with_token(
         row = await reset_repo.find_valid_token(token_hash, now=now)
         if row is None:
             raise AuthError("Invalid or expired reset token.")
-        await UserRepository(session).update_password_hash(
-            row.user_id,
-            hash_password(new_password),
-        )
+        user = await session.get(User, row.user_id)
+        if user is None:
+            raise AuthError("Invalid or expired reset token.")
+        user.password_hash = hash_password(new_password)
         await reset_repo.delete_token(row.id)
+        await session.commit()
+        username = user.username
+    return username
 
 
 async def _send_reset_email(settings: Settings, *, to_address: str, reset_link: str) -> bool:

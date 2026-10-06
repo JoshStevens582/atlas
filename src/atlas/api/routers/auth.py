@@ -3,10 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from atlas.api.deps import (
+    assert_login_not_locked,
+    clear_login_lockout,
     enforce_demo_rate_limit,
     enforce_forgot_password_rate_limit,
     enforce_login_rate_limit,
     enforce_signup_rate_limit,
+    record_login_outcome,
 )
 from atlas.schemas.auth import (
     ForgotPasswordRequest,
@@ -60,14 +63,17 @@ async def login(
 ) -> TokenOut:
     _require_auth_secret(request)
     settings = request.app.state.settings
+    await assert_login_not_locked(request, payload.username)
     username = await authenticate_user(
         request.app.state.session_factory, payload.username, payload.password
     )
     if username is None:
+        await record_login_outcome(request, username=payload.username, success=False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
         )
+    await record_login_outcome(request, username=username, success=True)
     return TokenOut(access_token=issue_access_token(settings, username), username=username)
 
 
@@ -124,11 +130,12 @@ async def reset_password(
 ) -> MessageOut:
     _require_auth_secret(request)
     try:
-        await reset_password_with_token(
+        username = await reset_password_with_token(
             request.app.state.session_factory,
             raw_token=payload.token,
             new_password=payload.password,
         )
     except AuthError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await clear_login_lockout(request, username)
     return MessageOut(message="Password updated. You can sign in with the new password.")

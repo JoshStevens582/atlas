@@ -6,6 +6,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from atlas.schemas.auth import AuthUser
 from atlas.services.auth import verify_access_token
+from atlas.services.login_lockout import (
+    AccountLocked,
+    LoginLockout,
+    LoginLockoutUnavailable,
+)
 from atlas.services.rate_limit import RateLimiter, RateLimiterUnavailable, RateLimitExceeded
 
 logger = logging.getLogger("atlas.deps")
@@ -76,6 +81,108 @@ async def enforce_demo_rate_limit(request: Request) -> None:
 
 async def enforce_forgot_password_rate_limit(request: Request) -> None:
     await _enforce_bucket(request, subject=_client_ip(request), bucket="forgot_password")
+
+
+def _get_login_lockout(request: Request) -> LoginLockout | None:
+    lockout = getattr(request.app.state, "login_lockout", None)
+    if lockout is None:
+        return None
+    if not isinstance(lockout, LoginLockout):
+        raise RuntimeError("Login lockout is misconfigured.")
+    return lockout
+
+
+async def assert_login_not_locked(request: Request, username: str) -> None:
+    settings = request.app.state.settings
+    if not settings.login_lockout_enabled:
+        return
+    lockout = _get_login_lockout(request)
+    if lockout is None:
+        if settings.login_lockout_fail_closed:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Login lockout requires Redis. Start Redis or set "
+                    "LOGIN_LOCKOUT_ENABLED=false for local use without lockout."
+                ),
+            )
+        return
+    try:
+        await lockout.assert_not_locked(username)
+    except AccountLocked as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=exc.detail,
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+    except LoginLockoutUnavailable as exc:
+        logger.warning("login lockout unavailable mid-request")
+        if settings.login_lockout_fail_closed:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Login lockout requires Redis. Start Redis or set "
+                    "LOGIN_LOCKOUT_ENABLED=false for local use without lockout."
+                ),
+            ) from exc
+
+
+async def record_login_outcome(
+    request: Request, *, username: str, success: bool
+) -> None:
+    settings = request.app.state.settings
+    if not settings.login_lockout_enabled:
+        return
+    lockout = _get_login_lockout(request)
+    if lockout is None:
+        if settings.login_lockout_fail_closed and not success:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Login lockout requires Redis. Start Redis or set "
+                    "LOGIN_LOCKOUT_ENABLED=false for local use without lockout."
+                ),
+            )
+        return
+    try:
+        if success:
+            await lockout.record_success(username)
+            return
+        locked = await lockout.record_failure(username)
+        if locked:
+            duration = max(1, settings.login_lockout_duration_seconds)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    "Too many failed login attempts for this account. "
+                    f"Try again in {duration} seconds."
+                ),
+                headers={"Retry-After": str(duration)},
+            )
+    except LoginLockoutUnavailable as exc:
+        logger.warning("login lockout unavailable recording outcome")
+        if settings.login_lockout_fail_closed:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Login lockout requires Redis. Start Redis or set "
+                    "LOGIN_LOCKOUT_ENABLED=false for local use without lockout."
+                ),
+            ) from exc
+
+
+async def clear_login_lockout(request: Request, username: str) -> None:
+    """After a verified password reset, drop any lock state for that user."""
+    settings = request.app.state.settings
+    if not settings.login_lockout_enabled:
+        return
+    lockout = _get_login_lockout(request)
+    if lockout is None:
+        return
+    try:
+        await lockout.record_success(username)
+    except LoginLockoutUnavailable:
+        logger.warning("login lockout unavailable while clearing after reset")
 
 
 def _client_ip(request: Request) -> str:

@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     rate_limit_forgot_password_per_minute: int = 5
     rate_limit_forgot_password_per_day: int = 20
     rate_limit_ask_global_per_day: int = 200
+    login_lockout_enabled: bool = True
+    login_lockout_fail_closed: bool = True
+    login_lockout_max_failures: int = 5
+    login_lockout_failure_window_seconds: int = 15 * 60
+    login_lockout_duration_seconds: int = 15 * 60
     app_public_url: str = ""
     password_reset_ttl_seconds: int = 60 * 60
     # Local dev without SMTP: return the reset token in the JSON response.

@@ -62,6 +62,7 @@ async def _build(openai_api_key: str) -> tuple[AsyncClient, ScriptedRag, Any]:
         atlas_auth_secret="http-test-secret-that-is-long-enough",
         atlas_demo_users="alice:secret-a",
         rate_limit_enabled=False,
+        login_lockout_enabled=False,
     )
     await seed_demo_users(factory, settings)
     rag = ScriptedRag(

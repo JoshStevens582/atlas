@@ -18,6 +18,7 @@ from atlas.services.auth import seed_demo_users
 from atlas.services.ingest import IngestError, IngestService
 from atlas.services.ingest_queue import IngestQueue
 from atlas.services.ingest_worker import process_next_ingest_job
+from atlas.services.login_lockout import LoginLockout
 from atlas.services.rate_limit import RateLimiter
 
 type QueueHarness = tuple[AsyncClient, IngestQueue, AsyncMock, Path]
@@ -71,6 +72,7 @@ async def queue_harness(tmp_path: Path) -> AsyncIterator[QueueHarness]:
     app.state.ingest_service = ingest
     app.state.ingest_queue = queue
     app.state.rate_limiter = limiter
+    app.state.login_lockout = LoginLockout(redis, settings)
     app.include_router(auth_router)
     app.include_router(documents_router)
 

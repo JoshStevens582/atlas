@@ -39,6 +39,7 @@ async def upload_harness(tmp_path: Path) -> AsyncIterator[UploadHarness]:
         upload_dir=str(upload_dir),
         max_upload_bytes=1024,
         rate_limit_enabled=False,
+        login_lockout_enabled=False,
     )
     ingest = AsyncMock(spec=IngestService)
     ingest.ingest_path = AsyncMock(

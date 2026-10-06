@@ -26,6 +26,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         # a demo account is configured, but it was never created in the database
         atlas_demo_users="ghost:ghost-password",
         rate_limit_enabled=False,
+        login_lockout_enabled=False,
     )
     app.state.session_factory = async_sessionmaker(
         engine, expire_on_commit=False, class_=AsyncSession

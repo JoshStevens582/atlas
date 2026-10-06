@@ -65,6 +65,7 @@ async def _running_app(
         atlas_demo_users="alice:secret-a",
         upload_dir=str(tmp_path / "uploads"),
         rate_limit_enabled=False,
+        login_lockout_enabled=False,
     )
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
