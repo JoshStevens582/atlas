@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,6 +14,7 @@ from atlas.api.routers.documents import router as documents_router
 from atlas.api.routers.health import router as health_router
 from atlas.config import (
     UNSET_OPENAI_API_KEY_PLACEHOLDER,
+    Settings,
     load_settings,
     require_secure_auth_secret,
 )
@@ -26,17 +28,34 @@ from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
 from atlas.services.ingest_worker import run_worker_loop
 from atlas.services.logging_setup import configure_logging, shutdown_logging
+from atlas.services.login_lockout import LoginLockout
 from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter
 from atlas.services.redis_client import connect_redis
 from atlas.services.rerank import LlmReranker
 from atlas.services.retrieval_selftest import LlmQuestionWriter, RetrievalSelfTest
 
+logger = logging.getLogger("atlas.main")
+
+
+def _warn_if_smtp_test_sender(settings: Settings) -> None:
+    if not settings.smtp_host.strip():
+        return
+    from_address = (settings.smtp_from or settings.smtp_username or "").lower()
+    if "resend.dev" in from_address:
+        logger.warning(
+            "SMTP uses a Resend test From address; many inboxes (especially Gmail) "
+            "will not show password-reset mail. Verify your own domain in Resend and "
+            "set SMTP_FROM to that domain, or use another SMTP provider. "
+            "See docs/password_reset.md."
+        )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = load_settings()
     configure_logging(settings)
+    _warn_if_smtp_test_sender(settings)
     require_secure_auth_secret(settings)
     Path("data").mkdir(exist_ok=True)
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
@@ -102,6 +121,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if redis_client is not None and settings.rate_limit_enabled
         else None
     )
+    login_lockout = (
+        LoginLockout(redis_client, settings)
+        if redis_client is not None and settings.login_lockout_enabled
+        else None
+    )
     worker_task: asyncio.Task[None] | None = None
     worker_stop = asyncio.Event()
 
@@ -123,6 +147,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.rag_service = rag_service
     app.state.ingest_queue = ingest_queue
     app.state.rate_limiter = rate_limiter
+    app.state.login_lockout = login_lockout
     app.state.redis_client = redis_client
 
     if (

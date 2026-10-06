@@ -33,6 +33,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         atlas_auth_secret="http-test-secret",
         atlas_demo_users="alice:secret-a|bob:secret-b",
         rate_limit_enabled=False,
+        login_lockout_enabled=False,
     )
     await seed_demo_users(factory, settings)
     app = FastAPI()
@@ -133,6 +134,7 @@ async def test_login_requires_auth_secret_configured() -> None:
         atlas_auth_secret="",
         atlas_demo_users="alice:secret-a",
         rate_limit_enabled=False,
+        login_lockout_enabled=False,
     )
     app = FastAPI()
     app.state.settings = settings
@@ -160,6 +162,7 @@ async def test_demo_login_503_when_no_demo_account_configured() -> None:
         atlas_auth_secret="http-test-secret",
         atlas_demo_users="",
         rate_limit_enabled=False,
+        login_lockout_enabled=False,
     )
     app = FastAPI()
     app.state.settings = settings

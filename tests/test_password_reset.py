@@ -26,6 +26,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         atlas_auth_secret="password-reset-test-secret-32-bytes-min",
         atlas_demo_users="",
         rate_limit_enabled=False,
+        login_lockout_enabled=False,
         password_reset_expose_token_in_response=True,
     )
     app = FastAPI()

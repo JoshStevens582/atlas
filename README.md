@@ -112,6 +112,8 @@ Users share **your** OpenAI key. Atlas caps abuse in Redis (fail **closed** if R
 
 Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (won’t run uncapped). Local without Redis: `RATE_LIMIT_ENABLED=false`. Auth routes (`/login`, `/signup`, `/demo`) are capped by **client IP** because there is no logged-in user yet.
 
+**Brute-force lockout:** after five failed logins for the same username within 15 minutes, that username is locked for 15 minutes (**429**, `Retry-After`), even from another IP. Successful login or password reset clears it. Redis required when `LOGIN_LOCKOUT_ENABLED=true` (default). See `docs/login_lockout.md`.
+
 **Also set a hard spend limit in the OpenAI dashboard** (Settings → Billing / Limits). That is the last stop if something bypasses the app.
 
 ### Answer check (works on any uploaded document)

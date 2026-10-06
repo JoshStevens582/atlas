@@ -21,6 +21,7 @@ from atlas.schemas.chat import DocumentOut
 from atlas.services.auth import issue_access_token, seed_demo_users
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
+from atlas.services.login_lockout import LoginLockout
 from atlas.services.rag import RagChatService
 from atlas.services.rate_limit import RateLimiter, RateLimiterUnavailable, RateLimitExceeded
 
@@ -161,6 +162,7 @@ async def limited_client() -> AsyncIterator[AsyncClient]:
     app.state.settings = settings
     app.state.session_factory = factory
     app.state.rate_limiter = limiter
+    app.state.login_lockout = LoginLockout(redis, settings)
     app.state.ingest_service = ingest
     app.state.ingest_queue = None
     app.state.rag_service = RagChatService(
@@ -375,6 +377,7 @@ async def test_login_returns_429_when_over_limit() -> None:
     app.state.settings = settings
     app.state.session_factory = factory
     app.state.rate_limiter = limiter
+    app.state.login_lockout = LoginLockout(redis, settings)
     app.include_router(auth_router)
 
     async with AsyncClient(
