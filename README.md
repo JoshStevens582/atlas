@@ -140,6 +140,7 @@ docker compose up -d --build
 - Without `SITE_ADDRESS` it serves plain HTTP on port 80.
 - With `SITE_ADDRESS=your.domain` in `.env`, Caddy gets and renews a free HTTPS certificate and redirects HTTP to HTTPS. DNS must point at the server and ports 80 and 443 must be open.
 - Data (SQLite, Chroma, uploads) lives in the `atlas-data` volume and survives rebuilds and restarts.
+- On the production VPS, run once after clone: `sudo bash deploy/setup_host_stability.sh` (2 GB swap, weekly reboot, five-minute health watchdog). Compose sets memory caps on `api`, `redis`, and `web`.
 - CI builds and starts this stack on every PR and checks it through the front door.
 
 ## Architecture

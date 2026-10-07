@@ -6,6 +6,8 @@
 services:
   api:
     build: .
+    # Cap API memory so a leak cannot take the whole 4 GB VM offline.
+    mem_limit: 2560m
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
@@ -27,6 +29,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    mem_limit: 384m
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -41,6 +44,7 @@ services:
     build:
       context: .
       dockerfile: deploy/Dockerfile.web
+    mem_limit: 256m
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
     ports:
