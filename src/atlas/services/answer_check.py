@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 from pydantic import ValidationError
 
 from atlas.schemas.chat import AnswerCheck, RetrievedChunk
+from atlas.services.openai_model_params import responses_api_kwargs
 
 logger = logging.getLogger("atlas.answer_check")
 
@@ -81,7 +82,7 @@ class LlmAnswerChecker:
                 instructions=CHECK_INSTRUCTIONS,
                 input=build_check_payload(question, answer, sources),
                 text_format=AnswerCheck,
-                temperature=0,
+                **responses_api_kwargs(self._model),
             )
         except (openai.OpenAIError, ValidationError) as exc:
             logger.warning(

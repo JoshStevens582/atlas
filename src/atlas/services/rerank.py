@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
 from atlas.schemas.chat import RetrievedChunk
+from atlas.services.openai_model_params import responses_api_kwargs
 
 logger = logging.getLogger("atlas.rerank")
 
@@ -95,7 +96,7 @@ class LlmReranker:
                 instructions=RERANK_INSTRUCTIONS,
                 input=build_rerank_payload(question, pool),
                 text_format=RerankResult,
-                temperature=0,
+                **responses_api_kwargs(self._model),
             )
         except (openai.OpenAIError, ValidationError) as exc:
             logger.warning(

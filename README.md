@@ -29,8 +29,8 @@ The Library is 21 pages of the **TTS Handbook** (leave, overtime, travel, work s
 | Chat DB | SQLite via SQLAlchemy | Threads, messages, document *metadata* only |
 | **Vector DB** | **ChromaDB** (cosine, persistent under `data/chroma`) | Chunk embeddings + nearest-neighbor search |
 | **Hybrid retrieve** | Chroma vectors + **BM25** keywords, fused with RRF | Rare words / ids that cosine can miss |
-| **Re-ranker** | `gpt-4o-mini` reads the question and each merged chunk, keeps the best 5 | Puts the most useful paragraph first; falls back to the merged order if the call fails |
-| Model | OpenAI `gpt-4o-mini` + `text-embedding-3-small` | Streaming Responses API |
+| **Re-ranker** | `gpt-6-luna` reads the question and each merged chunk, keeps the best 5 | Puts the most useful paragraph first; falls back to the merged order if the call fails |
+| Model | OpenAI `gpt-6-luna` + `text-embedding-3-small` | Streaming Responses API |
 | UI | React + TypeScript | SSE tokens, citations, Sources used panel |
 
 SQLite is **not** the vector database. ChromaDB is. Atlas embeds with OpenAI and passes those vectors into Chroma explicitly (no local ONNX embedder).
@@ -118,7 +118,7 @@ Over limit → **429**. No Redis while `RATE_LIMIT_ENABLED=true` → **503** (wo
 
 ### Answer check (works on any uploaded document)
 
-The golden-set eval only covers the handbook pages. For documents users upload there is no answer key, so every handbook Ask gets a second, separate model call after the answer streams: it reads the question, the answer and the retrieved chunks and returns `supported`, `partly_supported` or `not_supported` with a one-line reason. The Sources panel shows it as a `check` stream event. It is a model judging a model, so it can be wrong, and the UI says so. It is skipped for tool answers and the "not in the handbook" reply, and if the call fails the Ask still succeeds with no verdict. The verdict is cached with the answer. Turn it off with `ANSWER_CHECK_ENABLED=false`; the model is `ANSWER_CHECK_MODEL` (default `gpt-4o-mini`).
+The golden-set eval only covers the handbook pages. For documents users upload there is no answer key, so every handbook Ask gets a second, separate model call after the answer streams: it reads the question, the answer and the retrieved chunks and returns `supported`, `partly_supported` or `not_supported` with a one-line reason. The Sources panel shows it as a `check` stream event. It is a model judging a model, so it can be wrong, and the UI says so. It is skipped for tool answers and the "not in the handbook" reply, and if the call fails the Ask still succeeds with no verdict. The verdict is cached with the answer. Turn it off with `ANSWER_CHECK_ENABLED=false`; the model is `ANSWER_CHECK_MODEL` (default `gpt-6-luna`).
 
 ### Upload self-test
 
