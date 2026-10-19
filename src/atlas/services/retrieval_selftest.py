@@ -16,9 +16,9 @@ from openai import AsyncOpenAI
 from pydantic import ValidationError
 
 from atlas.repositories.chroma_repo import ChromaChunkStore
-from atlas.services.openai_model_params import responses_api_kwargs
 from atlas.schemas.chat import RetrievalCheckOut, RetrievedChunk
 from atlas.schemas.eval import PassageQuestions
+from atlas.services.openai_model_params import responses_api_kwargs
 
 logger = logging.getLogger("atlas.retrieval_selftest")
 
