@@ -20,6 +20,7 @@ from atlas.schemas.chat import AnswerCheck, RetrievedChunk
 from atlas.services.answer_cache import AnswerCache
 from atlas.services.answer_check import AnswerChecker
 from atlas.services.embeddings import EmbeddingClient
+from atlas.services.openai_model_params import responses_api_kwargs
 from atlas.services.rag import MAX_TOOL_CALLS_PER_ROUND, TOO_MANY_TOOL_CALLS, RagChatService
 
 NO_ANSWER = "I could not generate an answer from the retrieved documents."
@@ -708,7 +709,9 @@ async def test_answer_once_marks_the_cards_the_answer_used(
 
     assert answer == "Northstar [1]"
     assert sources[0].cited is True
-    assert openai.create_calls[0]["temperature"] == 0
+    model_kwargs = responses_api_kwargs(service._settings.openai_chat_model)
+    for key, value in model_kwargs.items():
+        assert openai.create_calls[0][key] == value
 
 
 @pytest.mark.asyncio

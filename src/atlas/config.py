@@ -17,7 +17,7 @@ class InsecureAuthSecretError(RuntimeError):
 
 class Settings(BaseSettings):
     openai_api_key: str = ""
-    openai_chat_model: str = "gpt-4o-mini"
+    openai_chat_model: str = "gpt-6-luna"
     openai_embedding_model: str = "text-embedding-3-small"
     database_url: str = "sqlite+aiosqlite:///./data/atlas.db"
     chroma_path: str = "./data/chroma"
@@ -31,11 +31,11 @@ class Settings(BaseSettings):
     hybrid_search_enabled: bool = True
     hybrid_rrf_k: int = 60
     rerank_enabled: bool = True
-    rerank_model: str = "gpt-4o-mini"
+    rerank_model: str = "gpt-6-luna"
     answer_check_enabled: bool = True
-    answer_check_model: str = "gpt-4o-mini"
+    answer_check_model: str = "gpt-6-luna"
     retrieval_check_enabled: bool = True
-    retrieval_check_model: str = "gpt-4o-mini"
+    retrieval_check_model: str = "gpt-6-luna"
     retrieval_check_samples: int = 6
     history_window: int = 12
     max_tool_rounds: int = 3
@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     rate_limit_demo_per_day: int = 200
     rate_limit_forgot_password_per_minute: int = 5
     rate_limit_forgot_password_per_day: int = 20
+    rate_limit_resend_verification_per_minute: int = 5
+    rate_limit_resend_verification_per_day: int = 20
+    email_verification_ttl_seconds: int = 60 * 60 * 24
+    email_verification_expose_token_in_response: bool = False
     rate_limit_ask_global_per_day: int = 200
     login_lockout_enabled: bool = True
     login_lockout_fail_closed: bool = True

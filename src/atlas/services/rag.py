@@ -26,6 +26,7 @@ from atlas.services.citations import assign_cite_numbers, mark_cited_chunks
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.hybrid import bm25_rank, fuse_hybrid
 from atlas.services.observability import AskTrace
+from atlas.services.openai_model_params import responses_api_kwargs
 from atlas.services.prompting import (
     DEVELOPER_INSTRUCTIONS,
     build_user_payload,
@@ -157,7 +158,7 @@ class RagChatService:
         response = await self._openai.responses.create(
             model=self._settings.openai_chat_model,
             instructions=DEVELOPER_INSTRUCTIONS,
-            temperature=0,
+            **responses_api_kwargs(self._settings.openai_chat_model),
             input=cast(
                 ResponseInputParam,
                 [

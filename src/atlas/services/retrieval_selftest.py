@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.schemas.chat import RetrievalCheckOut, RetrievedChunk
 from atlas.schemas.eval import PassageQuestions
+from atlas.services.openai_model_params import responses_api_kwargs
 
 logger = logging.getLogger("atlas.retrieval_selftest")
 
@@ -83,7 +84,7 @@ class LlmQuestionWriter:
                 instructions=QUESTION_INSTRUCTIONS,
                 input=build_question_payload(passages),
                 text_format=PassageQuestions,
-                temperature=0,
+                **responses_api_kwargs(self._model),
             )
         except (openai.OpenAIError, ValidationError) as exc:
             logger.warning("Question writing failed (%s); no self-test.", type(exc).__name__)
