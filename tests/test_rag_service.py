@@ -20,6 +20,7 @@ from atlas.schemas.chat import AnswerCheck, RetrievedChunk
 from atlas.services.answer_cache import AnswerCache
 from atlas.services.answer_check import AnswerChecker
 from atlas.services.embeddings import EmbeddingClient
+from atlas.services.openai_model_params import responses_api_kwargs
 from atlas.services.rag import MAX_TOOL_CALLS_PER_ROUND, TOO_MANY_TOOL_CALLS, RagChatService
 
 NO_ANSWER = "I could not generate an answer from the retrieved documents."
