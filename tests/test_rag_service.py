@@ -708,7 +708,9 @@ async def test_answer_once_marks_the_cards_the_answer_used(
 
     assert answer == "Northstar [1]"
     assert sources[0].cited is True
-    assert openai.create_calls[0]["temperature"] == 0
+    model_kwargs = responses_api_kwargs(service._settings.openai_chat_model)
+    for key, value in model_kwargs.items():
+        assert openai.create_calls[0][key] == value
 
 
 @pytest.mark.asyncio
