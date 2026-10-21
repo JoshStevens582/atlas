@@ -82,7 +82,7 @@ class RagChatService:
     async def get_thread(self, thread_id: str, owner_id: str) -> ThreadDetailOut:
         async with self._session_factory() as session:
             thread = await ThreadRepository(session).get_owned_thread(thread_id, owner_id)
-        messages = sorted(thread.messages, key=lambda item: item.created_at)
+        messages = sorted(thread.messages, key=lambda item: (item.created_at, item.id))
         return ThreadDetailOut(
             id=thread.id,
             title=thread.title,

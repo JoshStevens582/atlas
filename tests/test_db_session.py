@@ -154,6 +154,57 @@ async def test_owner_column_check_does_nothing_when_there_is_no_threads_table(
 
 
 @pytest.mark.asyncio
+async def test_email_verified_grandfather_runs_only_when_column_is_added(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "CREATE TABLE users ("
+                    "id VARCHAR(36) PRIMARY KEY, username VARCHAR(64) NOT NULL, "
+                    "password_hash VARCHAR(255) NOT NULL, email VARCHAR(320), created_at DATETIME)"
+                )
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, password_hash, email, created_at) "
+                    "VALUES ('u1', 'legacy', 'hash', 'old@example.com', datetime('now'))"
+                )
+            )
+
+        await init_database(engine)
+
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, password_hash, email, email_verified_at) "
+                    "VALUES ('u2', 'new', 'hash', 'new@example.com', NULL)"
+                )
+            )
+
+        await init_database(engine)
+
+        async with engine.connect() as connection:
+            legacy = (
+                await connection.execute(
+                    text("SELECT email_verified_at IS NOT NULL FROM users WHERE id = 'u1'")
+                )
+            ).scalar_one()
+            pending = (
+                await connection.execute(
+                    text("SELECT email_verified_at IS NULL FROM users WHERE id = 'u2'")
+                )
+            ).scalar_one()
+    finally:
+        await engine.dispose()
+
+    assert legacy == 1
+    assert pending == 1
+
+
+@pytest.mark.asyncio
 async def test_session_iterator_yields_a_working_session(tmp_path: Path) -> None:
     engine = create_engine(_settings(tmp_path / "atlas.db"))
     try:

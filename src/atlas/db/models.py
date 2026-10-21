@@ -1,7 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from threading import Lock
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+_utc_now_lock = Lock()
+_last_utc_timestamp: datetime | None = None
 
 
 class Base(DeclarativeBase):
@@ -9,12 +13,19 @@ class Base(DeclarativeBase):
 
 
 def _utc_now() -> datetime:
-    """Row timestamp with microseconds.
+    """Monotonic UTC timestamp with microsecond resolution.
 
-    SQLite's CURRENT_TIMESTAMP only has one-second resolution, so a question and
-    its reply saved in the same second would tie and sort in an undefined order.
+    SQLite's ``CURRENT_TIMESTAMP`` is only one second wide, and fast back-to-back
+    inserts can still tie on the same microsecond. Bump by 1µs so chat order stays
+    stable under load and in tests.
     """
-    return datetime.now(UTC)
+    global _last_utc_timestamp
+    with _utc_now_lock:
+        now = datetime.now(UTC)
+        if _last_utc_timestamp is not None and now <= _last_utc_timestamp:
+            now = _last_utc_timestamp + timedelta(microseconds=1)
+        _last_utc_timestamp = now
+        return now
 
 
 class ChatThread(Base):
