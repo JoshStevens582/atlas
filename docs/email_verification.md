@@ -14,7 +14,9 @@ Demo accounts (alice/bob) have no email and are unchanged.
 
 **POST `/api/auth/login`** returns **403** with a clear message if the password is correct but the email is not verified yet.
 
-Existing production users who already had an email on file are **grandfathered** as verified on first boot after this upgrade (SQLite migration in `init_database`).
+Existing production users who already had an email on file are **grandfathered** as verified **once**, when the `email_verified_at` column is first added (SQLite migration in `init_database`). New signups after that stay unverified until they click the link.
+
+**Deliverability:** Gmail and most major providers work when you send from a verified domain (see below). Some providers (e.g. Yahoo) may delay or filter harder — check spam and the [Resend](https://resend.com/emails) dashboard (`delivered` vs `bounced`).
 
 ## Settings
 

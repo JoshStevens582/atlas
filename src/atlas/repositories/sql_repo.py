@@ -23,7 +23,7 @@ class ThreadRepository:
         result = await self._session.execute(
             select(ChatThread)
             .where(ChatThread.owner_id == owner_id)
-            .order_by(ChatThread.created_at.desc())
+            .order_by(ChatThread.created_at.desc(), ChatThread.id.desc())
         )
         return list(result.scalars().all())
 
@@ -68,7 +68,7 @@ class ThreadRepository:
         result = await self._session.execute(
             select(ChatMessage)
             .where(ChatMessage.thread_id == thread_id)
-            .order_by(ChatMessage.created_at.desc())
+            .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
             .limit(limit)
         )
         rows = list(result.scalars().all())
