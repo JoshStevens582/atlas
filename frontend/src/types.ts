@@ -1,3 +1,19 @@
+export type UserRole = "user" | "admin";
+
+export type Me = {
+  username: string;
+  role: UserRole;
+};
+
+export type AdminUser = {
+  username: string;
+  email: string | null;
+  email_verified: boolean;
+  role: UserRole;
+  disabled: boolean;
+  created_at: string | null;
+};
+
 export type HealthStatus = {
   status: string;
   openai_configured: boolean;

@@ -1,10 +1,13 @@
 import type {
+  AdminUser,
   HealthStatus,
   IndexedDocument,
   IngestJob,
+  Me,
   StreamEvent,
   ThreadDetail,
   ThreadSummary,
+  UserRole,
 } from "./types";
 
 const TOKEN_KEY = "atlas_access_token";
@@ -152,6 +155,40 @@ export async function resetPassword(token: string, password: string): Promise<st
 /** One click, no typing: logs in as the seeded demo account. */
 export function loginAsDemo(): Promise<string> {
   return loginRequest("/api/auth/demo");
+}
+
+export function fetchMe(): Promise<Me> {
+  return fetch("/api/auth/me", { headers: authHeaders() }).then((response) =>
+    readJson<Me>(response),
+  );
+}
+
+export function fetchAdminUsers(): Promise<AdminUser[]> {
+  return fetch("/api/admin/users", { headers: authHeaders() }).then((response) =>
+    readJson<AdminUser[]>(response),
+  );
+}
+
+export function setUserRole(username: string, role: UserRole): Promise<AdminUser> {
+  return fetch(`/api/admin/users/${encodeURIComponent(username)}/role`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ role }),
+  }).then((response) => readJson<AdminUser>(response));
+}
+
+export function disableUser(username: string): Promise<AdminUser> {
+  return fetch(`/api/admin/users/${encodeURIComponent(username)}/disable`, {
+    method: "POST",
+    headers: authHeaders(),
+  }).then((response) => readJson<AdminUser>(response));
+}
+
+export function enableUser(username: string): Promise<AdminUser> {
+  return fetch(`/api/admin/users/${encodeURIComponent(username)}/enable`, {
+    method: "POST",
+    headers: authHeaders(),
+  }).then((response) => readJson<AdminUser>(response));
 }
 
 export function fetchHealth(): Promise<HealthStatus> {

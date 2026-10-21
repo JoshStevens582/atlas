@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
 
+from atlas.api.routers.admin import router as admin_router
 from atlas.api.routers.auth import router as auth_router
 from atlas.api.routers.chat import router as chat_router
 from atlas.api.routers.documents import router as documents_router
@@ -20,6 +21,7 @@ from atlas.config import (
 )
 from atlas.db.session import create_engine, create_session_factory, init_database
 from atlas.repositories.chroma_repo import ChromaChunkStore
+from atlas.services.admin import apply_admin_usernames
 from atlas.services.answer_cache import AnswerCache
 from atlas.services.answer_check import LlmAnswerChecker
 from atlas.services.auth import seed_demo_users
@@ -66,6 +68,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     session_factory = create_session_factory(engine)
     if settings.atlas_auth_secret:
         await seed_demo_users(session_factory, settings)
+        await apply_admin_usernames(session_factory, settings)
     openai_client = AsyncOpenAI(
         api_key=settings.openai_api_key or UNSET_OPENAI_API_KEY_PLACEHOLDER
     )
@@ -194,5 +197,6 @@ app.add_middleware(
 )
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(chat_router)
 app.include_router(documents_router)

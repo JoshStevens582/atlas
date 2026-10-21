@@ -7,6 +7,7 @@ from atlas.config import Settings
 from atlas.db.session import (
     _ensure_document_check_columns,
     _ensure_thread_owner_column,
+    _ensure_user_role_column,
     create_engine,
     create_session_factory,
     init_database,
@@ -202,6 +203,59 @@ async def test_email_verified_grandfather_runs_only_when_column_is_added(
 
     assert legacy == 1
     assert pending == 1
+
+
+@pytest.mark.asyncio
+async def test_init_database_adds_role_columns_to_an_old_users_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "CREATE TABLE users ("
+                    "id VARCHAR(36) PRIMARY KEY, username VARCHAR(64) NOT NULL, "
+                    "password_hash VARCHAR(255) NOT NULL, email VARCHAR(320), "
+                    "email_verified_at DATETIME, created_at DATETIME)"
+                )
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, password_hash, email) "
+                    "VALUES ('u1', 'legacy', 'hash', 'old@example.com')"
+                )
+            )
+
+        await init_database(engine)
+        await init_database(engine)
+
+        async with engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    text("SELECT role, disabled_at FROM users WHERE id = 'u1'")
+                )
+            ).one()
+    finally:
+        await engine.dispose()
+
+    assert row[0] == "user"
+    assert row[1] is None
+
+
+@pytest.mark.asyncio
+async def test_role_column_check_does_nothing_when_there_is_no_users_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_ensure_user_role_column)
+            tables = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+    finally:
+        await engine.dispose()
+
+    assert tables == []
 
 
 @pytest.mark.asyncio

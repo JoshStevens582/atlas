@@ -445,6 +445,58 @@ textarea {
   text-align: left;
 }
 
+.people-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.people-panel .chat-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.people-list {
+  overflow: auto;
+  padding: 12px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.people-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--bg-elev);
+}
+
+.people-row strong {
+  display: block;
+}
+
+.people-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.people-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.people-actions .pill {
+  background: transparent;
+  color: var(--text);
+}
+
 @media (max-width: 1100px) {
   .app {
     grid-template-columns: 1fr;

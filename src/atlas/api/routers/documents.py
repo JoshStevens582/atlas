@@ -7,7 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from atlas.api.deps import enforce_upload_rate_limit, require_user
+from atlas.api.deps import enforce_upload_rate_limit, require_admin, require_user
 from atlas.repositories.sql_repo import DocumentRepository
 from atlas.schemas.auth import AuthUser
 from atlas.schemas.chat import DocumentOut
@@ -150,7 +150,7 @@ async def upload_document(
 async def delete_document(
     document_id: str,
     ingest: Annotated[IngestService, Depends(get_ingest)],
-    _: Annotated[AuthUser, Depends(require_user)],
+    _: Annotated[AuthUser, Depends(require_admin)],
 ) -> dict[str, str]:
     deleted = await ingest.delete_document(document_id)
     if not deleted:

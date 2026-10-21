@@ -19,7 +19,7 @@ The Library is 21 pages of the **TTS Handbook** (leave, overtime, travel, work s
 2. The answer is **240**, with `[1]` in the sentence. Point at **Sources used**: that passage was found *before* the model wrote a word. The card says which passage `[1]` is, and `in answer` marks that the model used it. The **Answer backed by the sources** card is a second model checking the answer against those passages.
 3. Click **I have 182 annual leave hours, 5 years of service and 25 pay periods left. How many hours would I lose?** Arithmetic is not something to trust a language model with, so the model calls `estimate_annual_leave`, Atlas runs it, and a tool card shows 332 projected hours and **92** lost to the 240 cap. The rule itself still comes from the handbook.
 4. Click **Which day is Independence Day observed in 2026?** The model calls `get_federal_holidays`. The tool card shows Saturday 4 July, observed Friday 3 July.
-5. Upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer. The Library scores the new file with the same self-test. With a longer file, the cards are labelled `vector`, `lexical`, or `both`, and the re-ranker puts the most useful passage first.
+5. If you are signed in as an **admin**, upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer. The Library scores the new file with the same self-test. With a longer file, the cards are labelled `vector`, `lexical`, or `both`, and the re-ranker puts the most useful passage first. Demo users can Ask and read the Library; they cannot add or remove documents.
 
 ## Stack
 
@@ -60,7 +60,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look, sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or **create an account** with username, password, and email — verify the inbox link before sign-in (`docs/email_verification.md`). Passwords are bcrypt-hashed in SQLite. Threads are per user. On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick).
+Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look, sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or **create an account** with username, password, and email — verify the inbox link before sign-in (`docs/email_verification.md`). Passwords are bcrypt-hashed in SQLite. Threads are per user. Set `ATLAS_ADMIN_USERNAMES` to your username to bootstrap the first admin (`docs/admin_roles.md`). On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick).
 To wipe everything and re-index the handbook with self-test scores (stop the API first, Chroma and SQLite are not meant for two writers):
 
 ```powershell

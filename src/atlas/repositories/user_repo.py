@@ -1,10 +1,15 @@
+from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from atlas.db.models import User
+
+ROLE_USER = "user"
+ROLE_ADMIN = "admin"
+VALID_ROLES = frozenset({ROLE_USER, ROLE_ADMIN})
 
 
 class UsernameTakenError(Exception):
@@ -39,6 +44,7 @@ class UserRepository:
             username=username,
             password_hash=password_hash,
             email=normalized_email,
+            role=ROLE_USER,
         )
         self._session.add(user)
         try:
@@ -58,3 +64,35 @@ class UserRepository:
             return
         user.password_hash = password_hash
         await self._session.commit()
+
+    async def list_users(self) -> list[User]:
+        result = await self._session.execute(
+            select(User).order_by(User.created_at.asc(), User.username.asc())
+        )
+        return list(result.scalars().all())
+
+    async def count_admins(self) -> int:
+        result = await self._session.execute(
+            select(func.count()).select_from(User).where(User.role == ROLE_ADMIN)
+        )
+        return int(result.scalar_one())
+
+    async def set_role(self, user_id: str, role: str) -> User | None:
+        user = await self._session.get(User, user_id)
+        if user is None:
+            return None
+        user.role = role
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user
+
+    async def set_disabled_at(
+        self, user_id: str, disabled_at: datetime | None
+    ) -> User | None:
+        user = await self._session.get(User, user_id)
+        if user is None:
+            return None
+        user.disabled_at = disabled_at
+        await self._session.commit()
+        await self._session.refresh(user)
+        return user

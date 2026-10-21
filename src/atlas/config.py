@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     atlas_auth_secret: str = "dev-only-change-me"
     atlas_demo_users: str = "alice:atlas-alice|bob:atlas-bob"
+    # Comma-separated usernames promoted to admin on startup (bootstrap only;
+    # never demotes). Example: ATLAS_ADMIN_USERNAMES=joshua
+    atlas_admin_usernames: str = ""
     redis_url: str = "redis://127.0.0.1:6379/0"
     # Laptop default: start without Redis (sync upload, no cache, rate limits 503).
     # docker-compose sets this true so the API refuses to start until Redis answers.
