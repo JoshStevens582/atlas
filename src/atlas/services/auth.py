@@ -7,12 +7,10 @@ can click straight in, but nothing about how they're stored is special-cased.
 
 Session tokens (``issue_access_token`` / ``verify_access_token``) are real
 JWTs (HS256, signed with ``ATLAS_AUTH_SECRET``): standard header.payload.signature
-format, `sub` + `iat` + `exp` claims, verified with PyJWT. We deliberately do
-not hit the database on every authenticated request to re-check the user
-still exists — the signature + `exp` claim *is* the session. That trades
-instant revocation (e.g. an admin deleting a user mid-session) for not
-adding a DB round trip to every single API call. Worth calling out as a
-real design choice, not an oversight, if it comes up.
+format, `sub` + `iat` + `exp` claims, verified with PyJWT. Authenticated
+routes then load the user row so a disable or role change applies without
+waiting for the 7-day token to expire. The JWT is still who you are; the
+row is whether that account may still act.
 """
 
 from __future__ import annotations
@@ -25,7 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atlas.config import Settings
 from atlas.db.models import User
-from atlas.repositories.user_repo import UsernameTakenError, UserRepository
+from atlas.repositories.user_repo import ROLE_ADMIN, UsernameTakenError, UserRepository
+from atlas.schemas.auth import UserRole
 
 JWT_ALGORITHM = "HS256"
 TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
@@ -46,6 +45,10 @@ class AuthError(Exception):
 def user_needs_email_verification(user: User) -> bool:
     """Login waits until signup email is verified (demo users have no email)."""
     return bool(user.email) and user.email_verified_at is None
+
+
+def user_role(user: User) -> UserRole:
+    return "admin" if user.role == ROLE_ADMIN else "user"
 
 
 def hash_password(password: str) -> str:

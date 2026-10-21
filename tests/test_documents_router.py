@@ -17,6 +17,7 @@ from atlas.api.routers.documents import router as documents_router
 from atlas.config import Settings
 from atlas.db.models import Base
 from atlas.repositories.sql_repo import DocumentRepository
+from atlas.services.admin import apply_admin_usernames
 from atlas.services.auth import seed_demo_users
 from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
@@ -63,6 +64,7 @@ async def _running_app(
         openai_api_key=openai_api_key,
         atlas_auth_secret="documents-router-test-key-long-enough",
         atlas_demo_users="alice:secret-a",
+        atlas_admin_usernames="alice",
         upload_dir=str(tmp_path / "uploads"),
         rate_limit_enabled=False,
         login_lockout_enabled=False,
@@ -76,6 +78,7 @@ async def _running_app(
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     await seed_demo_users(factory, settings)
+    await apply_admin_usernames(factory, settings)
 
     ingest = AsyncMock(spec=IngestService)
     app = FastAPI()

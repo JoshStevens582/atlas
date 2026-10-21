@@ -3,9 +3,12 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from atlas.repositories.user_repo import ROLE_ADMIN, UserRepository
 from atlas.schemas.auth import AuthUser
-from atlas.services.auth import verify_access_token
+from atlas.services.admin import user_is_disabled
+from atlas.services.auth import user_role, verify_access_token
 from atlas.services.login_lockout import (
     AccountLocked,
     LoginLockout,
@@ -18,7 +21,14 @@ logger = logging.getLogger("atlas.deps")
 _bearer = HTTPBearer(auto_error=False)
 
 
-def require_user(
+def _session_factory(request: Request) -> async_sessionmaker[AsyncSession]:
+    factory = getattr(request.app.state, "session_factory", None)
+    if not isinstance(factory, async_sessionmaker):
+        raise RuntimeError("Database session factory is not configured.")
+    return factory
+
+
+async def require_user(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> AuthUser:
@@ -39,7 +49,31 @@ def require_user(
             detail="Invalid or expired token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return AuthUser(username=username)
+    async with _session_factory(request)() as session:
+        user = await UserRepository(session).get_by_username(username)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if user_is_disabled(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is disabled.",
+        )
+    return AuthUser(username=user.username, role=user_role(user))
+
+
+async def require_admin(
+    user: Annotated[AuthUser, Depends(require_user)],
+) -> AuthUser:
+    if user.role != ROLE_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin only.",
+        )
+    return user
 
 
 def _get_rate_limiter(request: Request) -> RateLimiter | None:
@@ -61,7 +95,7 @@ async def enforce_ask_rate_limit(
 
 async def enforce_upload_rate_limit(
     request: Request,
-    user: Annotated[AuthUser, Depends(require_user)],
+    user: Annotated[AuthUser, Depends(require_admin)],
 ) -> AuthUser:
     await _enforce_bucket(request, subject=user.username, bucket="upload")
     return user

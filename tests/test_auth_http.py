@@ -187,6 +187,7 @@ async def test_demo_login_needs_no_credentials(client: AsyncClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["username"] == "alice"
+    assert body["role"] == "user"
 
     threads = await client.get(
         "/api/threads",

@@ -18,6 +18,7 @@ from atlas.config import Settings
 from atlas.db.models import Base
 from atlas.repositories.chroma_repo import ChromaChunkStore
 from atlas.schemas.chat import DocumentOut
+from atlas.services.admin import apply_admin_usernames
 from atlas.services.auth import issue_access_token, seed_demo_users
 from atlas.services.embeddings import EmbeddingClient
 from atlas.services.ingest import IngestService
@@ -128,6 +129,7 @@ async def limited_client() -> AsyncIterator[AsyncClient]:
         openai_api_key="sk-test",
         atlas_auth_secret="rate-test-secret",
         atlas_demo_users="alice:secret-a",
+        atlas_admin_usernames="alice",
         rate_limit_enabled=True,
         rate_limit_fail_closed=True,
         rate_limit_ask_per_minute=2,
@@ -145,6 +147,7 @@ async def limited_client() -> AsyncIterator[AsyncClient]:
         upload_dir="./data/uploads",
     )
     await seed_demo_users(factory, settings)
+    await apply_admin_usernames(factory, settings)
     redis = FakeRedis(decode_responses=True)
     limiter = RateLimiter(redis, settings)
     ingest = AsyncMock(spec=IngestService)

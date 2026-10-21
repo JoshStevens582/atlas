@@ -1,4 +1,9 @@
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+UserRole = Literal["user", "admin"]
 
 
 class LoginRequest(BaseModel):
@@ -31,6 +36,25 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     username: str
+    role: UserRole = "user"
+
+
+class MeOut(BaseModel):
+    username: str
+    role: UserRole
+
+
+class AdminUserOut(BaseModel):
+    username: str
+    email: str | None
+    email_verified: bool
+    role: UserRole
+    disabled: bool
+    created_at: datetime | None = None
+
+
+class SetRoleRequest(BaseModel):
+    role: UserRole
 
 
 class SignupOut(BaseModel):
@@ -51,3 +75,4 @@ class ResendVerificationRequest(BaseModel):
 
 class AuthUser(BaseModel):
     username: str
+    role: UserRole = "user"

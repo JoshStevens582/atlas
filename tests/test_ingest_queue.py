@@ -14,6 +14,7 @@ from atlas.api.routers.documents import router as documents_router
 from atlas.config import Settings
 from atlas.db.models import Base
 from atlas.schemas.chat import DocumentOut
+from atlas.services.admin import apply_admin_usernames
 from atlas.services.auth import seed_demo_users
 from atlas.services.ingest import IngestError, IngestService
 from atlas.services.ingest_queue import IngestQueue
@@ -31,6 +32,7 @@ async def queue_harness(tmp_path: Path) -> AsyncIterator[QueueHarness]:
         openai_api_key="sk-test",
         atlas_auth_secret="queue-test-secret",
         atlas_demo_users="alice:secret-a",
+        atlas_admin_usernames="alice",
         upload_dir=str(upload_dir),
         max_upload_bytes=1024,
         ingest_queue_key="atlas:test:ingest",
@@ -65,6 +67,7 @@ async def queue_harness(tmp_path: Path) -> AsyncIterator[QueueHarness]:
         await connection.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     await seed_demo_users(session_factory, settings)
+    await apply_admin_usernames(session_factory, settings)
 
     app = FastAPI()
     app.state.settings = settings

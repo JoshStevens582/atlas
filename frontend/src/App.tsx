@@ -2,8 +2,12 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import {
   deleteDocument,
+  disableUser,
+  enableUser,
+  fetchAdminUsers,
   fetchDocuments,
   fetchHealth,
+  fetchMe,
   fetchThread,
   fetchThreads,
   hasSession,
@@ -13,6 +17,7 @@ import {
   logout,
   resetPassword,
   resendVerification,
+  setUserRole,
   signup,
   verifyEmail,
   streamChat,
@@ -20,6 +25,7 @@ import {
   waitForIngestJob,
 } from "./api";
 import type {
+  AdminUser,
   AnswerCheck,
   AnswerVerdict,
   ChatMessage,
@@ -28,6 +34,7 @@ import type {
   RetrievedChunk,
   ThreadSummary,
   ToolCall,
+  UserRole,
 } from "./types";
 
 const CHECK_LABELS: Record<AnswerVerdict, string> = {
@@ -128,6 +135,10 @@ export default function App() {
   const [forgotNotice, setForgotNotice] = useState<string | null>(null);
   const [verifyAutoRunning, setVerifyAutoRunning] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
+  const [role, setRole] = useState<UserRole>("user");
+  const [signedInUsername, setSignedInUsername] = useState("");
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [documents, setDocuments] = useState<IndexedDocument[]>([]);
@@ -204,10 +215,25 @@ export default function App() {
     };
   }, []);
 
+  const isAdmin = role === "admin";
+
   useEffect(() => {
     if (!signedIn) {
       return;
     }
+    void fetchMe()
+      .then((me) => {
+        setRole(me.role);
+        setSignedInUsername(me.username);
+      })
+      .catch((reason: Error) => {
+        if (reason.message === "Not authenticated." || reason.message === "This account is disabled.") {
+          logout();
+          setSignedIn(false);
+          return;
+        }
+        setError(reason.message);
+      });
     refreshLists().catch((reason: Error) => {
       if (reason.message === "Not authenticated.") {
         setSignedIn(false);
@@ -425,6 +451,10 @@ export default function App() {
   function onLogout() {
     logout();
     setSignedIn(false);
+    setRole("user");
+    setSignedInUsername("");
+    setPeopleOpen(false);
+    setAdminUsers([]);
     setThreadId(null);
     setMessages([]);
     setThreads([]);
@@ -432,6 +462,45 @@ export default function App() {
     setSources([]);
     setAnswerCheck(null);
     setToolCalls([]);
+  }
+
+  async function refreshAdminUsers() {
+    const nextUsers = await fetchAdminUsers();
+    setAdminUsers(nextUsers);
+  }
+
+  async function onOpenPeople() {
+    setError(null);
+    setPeopleOpen(true);
+    try {
+      await refreshAdminUsers();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not load people.");
+    }
+  }
+
+  async function onChangeRole(username: string, nextRole: UserRole) {
+    setError(null);
+    try {
+      await setUserRole(username, nextRole);
+      await refreshAdminUsers();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not change role.");
+    }
+  }
+
+  async function onToggleDisabled(person: AdminUser) {
+    setError(null);
+    try {
+      if (person.disabled) {
+        await enableUser(person.username);
+      } else {
+        await disableUser(person.username);
+      }
+      await refreshAdminUsers();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not update account.");
+    }
   }
 
   async function onUpload(file: File | undefined) {
@@ -664,24 +733,35 @@ export default function App() {
           <span className="pill">{health?.document_count ?? 0} docs</span>
           <span className="pill">{health?.chunk_count ?? 0} chunks</span>
         </div>
-        <button className="new-chat" onClick={() => { setThreadId(null); setMessages([]); setSources([]); setAnswerCheck(null); setToolCalls([]); }}>
+        <button className="new-chat" onClick={() => { setPeopleOpen(false); setThreadId(null); setMessages([]); setSources([]); setAnswerCheck(null); setToolCalls([]); }}>
           New chat
         </button>
         <button className="new-chat" onClick={onLogout} type="button">
           Sign out
         </button>
-        <label className="upload" htmlFor="atlas-upload">
-          Add document (.md / .txt / .pdf)
-          <input
-            id="atlas-upload"
-            type="file"
-            accept=".md,.txt,.pdf,text/plain,text/markdown,application/pdf"
-            onChange={(event) => {
-              void onUpload(event.target.files?.[0]);
-              event.target.value = "";
-            }}
-          />
-        </label>
+        {isAdmin ? (
+          <button
+            className={`new-chat ${peopleOpen ? "active" : ""}`}
+            onClick={() => void onOpenPeople()}
+            type="button"
+          >
+            People
+          </button>
+        ) : null}
+        {isAdmin ? (
+          <label className="upload" htmlFor="atlas-upload">
+            Add document (.md / .txt / .pdf)
+            <input
+              id="atlas-upload"
+              type="file"
+              accept=".md,.txt,.pdf,text/plain,text/markdown,application/pdf"
+              onChange={(event) => {
+                void onUpload(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+          </label>
+        ) : null}
         <div>
           <div className="section-label">Threads</div>
           <div className="stack">
@@ -716,16 +796,18 @@ export default function App() {
                     </>
                   ) : null}
                 </span>
-                <button
-                  className="pill"
-                  onClick={() =>
-                    void deleteDocument(document.id).then(refreshLists).catch((reason: Error) =>
-                      setError(reason.message),
-                    )
-                  }
-                >
-                  Remove
-                </button>
+                {isAdmin ? (
+                  <button
+                    className="pill"
+                    onClick={() =>
+                      void deleteDocument(document.id).then(refreshLists).catch((reason: Error) =>
+                        setError(reason.message),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -733,6 +815,64 @@ export default function App() {
       </aside>
 
       <main className="panel chat">
+        {peopleOpen && isAdmin ? (
+          <section className="people-panel">
+            <header className="chat-header">
+              <h1>People</h1>
+              <p>
+                Admins can promote, demote, or disable accounts. Threads stay private —
+                this list is accounts, not chats. Signed in as {signedInUsername}.
+              </p>
+              <button className="new-chat" type="button" onClick={() => setPeopleOpen(false)}>
+                Back to chat
+              </button>
+            </header>
+            {error ? <p className="error" style={{ padding: "0 16px" }}>{error}</p> : null}
+            <div className="people-list">
+              {adminUsers.map((person) => (
+                <article className="people-row" key={person.username}>
+                  <div>
+                    <strong>{person.username}</strong>
+                    <span>
+                      {person.role}
+                      {person.disabled ? " · disabled" : ""}
+                      {person.email ? ` · ${person.email}` : ""}
+                      {person.email && !person.email_verified ? " (unverified)" : ""}
+                    </span>
+                  </div>
+                  <div className="people-actions">
+                    {person.username !== signedInUsername ? (
+                      <>
+                        <button
+                          className="pill"
+                          type="button"
+                          onClick={() =>
+                            void onChangeRole(
+                              person.username,
+                              person.role === "admin" ? "user" : "admin",
+                            )
+                          }
+                        >
+                          {person.role === "admin" ? "Make user" : "Make admin"}
+                        </button>
+                        <button
+                          className="pill"
+                          type="button"
+                          onClick={() => void onToggleDisabled(person)}
+                        >
+                          {person.disabled ? "Enable" : "Disable"}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="pill ok">you</span>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <>
         <header className="chat-header">
           <h1>{selectedTitle}</h1>
           <p>Ask the TTS Handbook (US government, public domain). Two tools do the leave and holiday calculations. Sources used shows both.</p>
@@ -799,6 +939,8 @@ export default function App() {
           </button>
         </form>
         {error && messages.length > 0 ? <p className="error" style={{ padding: "0 16px 12px" }}>{error}</p> : null}
+          </>
+        )}
       </main>
 
       <aside className="panel sources">

@@ -81,6 +81,12 @@ class User(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # Step 15: `user` (default) or `admin`. Existing rows get `user` on column add.
+    role: Mapped[str] = mapped_column(String(32), default="user")
+    disabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

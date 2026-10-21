@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from atlas import main
 from atlas.config import InsecureAuthSecretError, Settings
 from atlas.db.models import User
+from atlas.repositories.user_repo import ROLE_ADMIN, UserRepository
 from atlas.services.ingest import IngestService
 from atlas.services.ingest_queue import IngestQueue
 from atlas.services.login_lockout import LoginLockout
@@ -82,6 +83,20 @@ async def test_startup_without_redis_builds_the_app_and_skips_queue_and_limits(
         assert (tmp_path / "chroma").is_dir()
         assert (tmp_path / "atlas.db").is_file()
         assert await _user_count() == 1  # the alice demo user
+
+
+@pytest.mark.asyncio
+async def test_startup_promotes_listed_admin_usernames(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(tmp_path, atlas_admin_usernames="alice")
+    _use(monkeypatch, settings, redis=None)
+
+    async with main.lifespan(main.app):
+        async with main.app.state.session_factory() as session:
+            alice = await UserRepository(session).get_by_username("alice")
+        assert alice is not None
+        assert alice.role == ROLE_ADMIN
 
 
 @pytest.mark.asyncio

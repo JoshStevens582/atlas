@@ -11,11 +11,14 @@ from atlas.api.deps import (
     enforce_resend_verification_rate_limit,
     enforce_signup_rate_limit,
     record_login_outcome,
+    require_user,
 )
 from atlas.repositories.user_repo import UserRepository
 from atlas.schemas.auth import (
+    AuthUser,
     ForgotPasswordRequest,
     LoginRequest,
+    MeOut,
     MessageOut,
     ResendVerificationRequest,
     ResetPasswordRequest,
@@ -24,12 +27,14 @@ from atlas.schemas.auth import (
     TokenOut,
     VerifyEmailRequest,
 )
+from atlas.services.admin import user_is_disabled
 from atlas.services.auth import (
     AuthError,
     authenticate_user,
     issue_access_token,
     signup_user,
     user_needs_email_verification,
+    user_role,
 )
 from atlas.services.email_verification import (
     resend_verification_email,
@@ -125,9 +130,20 @@ async def login(
                 "Use resend verification if you need a new link."
             ),
         )
+    if user is not None and user_is_disabled(user):
+        await record_login_outcome(request, username=username, success=False)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is disabled.",
+        )
 
     await record_login_outcome(request, username=username, success=True)
-    return TokenOut(access_token=issue_access_token(settings, username), username=username)
+    role = user_role(user) if user is not None else "user"
+    return TokenOut(
+        access_token=issue_access_token(settings, username),
+        username=username,
+        role=role,
+    )
 
 
 @router.post("/demo", response_model=TokenOut)
@@ -156,7 +172,24 @@ async def demo_login(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Demo account is not available.",
         )
-    return TokenOut(access_token=issue_access_token(settings, username), username=username)
+    async with request.app.state.session_factory() as session:
+        demo_user = await UserRepository(session).get_by_username(username)
+    if demo_user is not None and user_is_disabled(demo_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is disabled.",
+        )
+    role = user_role(demo_user) if demo_user is not None else "user"
+    return TokenOut(
+        access_token=issue_access_token(settings, username),
+        username=username,
+        role=role,
+    )
+
+
+@router.get("/me", response_model=MeOut)
+async def me(user: Annotated[AuthUser, Depends(require_user)]) -> MeOut:
+    return MeOut(username=user.username, role=user.role)
 
 
 @router.post("/forgot-password", response_model=MessageOut)
