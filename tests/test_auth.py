@@ -50,7 +50,9 @@ def test_verify_password_rejects_malformed_hash() -> None:
 async def test_signup_then_login_round_trip(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    username = await signup_user(session_factory, "alice", "correct-horse-battery")
+    username = await signup_user(
+        session_factory, "alice", "correct-horse-battery", email="alice@example.com"
+    )
     assert username == "alice"
 
     assert await authenticate_user(session_factory, "alice", "wrong-password") is None
@@ -63,17 +65,26 @@ async def test_signup_rejects_short_username_or_password(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     with pytest.raises(AuthError, match="Username"):
-        await signup_user(session_factory, "ab", "correct-horse-battery")
+        await signup_user(session_factory, "ab", "correct-horse-battery", email="ab@example.com")
     with pytest.raises(AuthError, match="Password"):
-        await signup_user(session_factory, "alice", "short")
+        await signup_user(session_factory, "alice", "short", email="alice@example.com")
+
+
+async def test_signup_rejects_missing_email(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    with pytest.raises(AuthError, match="email"):
+        await signup_user(session_factory, "alice", "correct-horse-battery", email="")
 
 
 async def test_signup_rejects_duplicate_username(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    await signup_user(session_factory, "alice", "correct-horse-battery")
+    await signup_user(
+        session_factory, "alice", "correct-horse-battery", email="alice@example.com"
+    )
     with pytest.raises(AuthError, match="already taken"):
-        await signup_user(session_factory, "alice", "another-password")
+        await signup_user(session_factory, "alice", "another-password", email="other@example.com")
 
 
 async def test_login_unknown_username_returns_none(
@@ -90,14 +101,16 @@ async def test_signup_race_between_check_and_insert_is_caught(
     username exist" check before either commits. The DB's unique index is
     the real guard; this proves that race still surfaces as a clean
     AuthError instead of an unhandled IntegrityError."""
-    await signup_user(session_factory, "alice", "correct-horse-battery")
+    await signup_user(
+        session_factory, "alice", "correct-horse-battery", email="alice@example.com"
+    )
 
     async def _always_missing(self: UserRepository, username: str) -> None:
         return None
 
     monkeypatch.setattr(UserRepository, "get_by_username", _always_missing)
     with pytest.raises(AuthError, match="already taken"):
-        await signup_user(session_factory, "alice", "another-password")
+        await signup_user(session_factory, "alice", "another-password", email="other@example.com")
 
 
 @pytest.mark.parametrize(

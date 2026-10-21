@@ -95,23 +95,14 @@ export type SignupResult = {
 export async function signup(
   username: string,
   password: string,
-  email?: string,
+  email: string,
 ): Promise<SignupResult> {
-  const body: { username: string; password: string; email?: string } = { username, password };
-  const trimmed = email?.trim();
-  if (trimmed) {
-    body.email = trimmed;
-  }
   const response = await fetch("/api/auth/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ username, password, email: email.trim() }),
   });
-  const parsed = await readJson<SignupResult>(response);
-  if (parsed.access_token) {
-    sessionStorage.setItem(TOKEN_KEY, parsed.access_token);
-  }
-  return parsed;
+  return readJson<SignupResult>(response);
 }
 
 export async function verifyEmail(token: string): Promise<string> {

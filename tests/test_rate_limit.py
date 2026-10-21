@@ -431,12 +431,20 @@ async def test_signup_returns_429_when_over_limit() -> None:
     ) as client:
         first = await client.post(
             "/api/auth/signup",
-            json={"username": "carol", "password": "secret-c-long"},
+            json={
+                "username": "carol",
+                "password": "secret-c-long",
+                "email": "carol@example.com",
+            },
         )
         assert first.status_code == 200
         second = await client.post(
             "/api/auth/signup",
-            json={"username": "dave", "password": "secret-d-long"},
+            json={
+                "username": "dave",
+                "password": "secret-d-long",
+                "email": "dave@example.com",
+            },
         )
         assert second.status_code == 429
         assert "signup" in second.json()["detail"]

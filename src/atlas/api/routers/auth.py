@@ -82,21 +82,15 @@ async def signup(
             detail="Account was created but could not be loaded.",
         )
 
-    if user_needs_email_verification(user):
-        verify_result = await send_verification_email_for_user(
-            session_factory,
-            settings,
-            user=user,
-        )
-        return SignupOut(
-            username=username,
-            message=SIGNUP_VERIFY_MESSAGE,
-            dev_verify_token=verify_result.dev_verify_token,
-        )
-
+    verify_result = await send_verification_email_for_user(
+        session_factory,
+        settings,
+        user=user,
+    )
     return SignupOut(
         username=username,
-        access_token=issue_access_token(settings, username),
+        message=SIGNUP_VERIFY_MESSAGE,
+        dev_verify_token=verify_result.dev_verify_token,
     )
 
 
