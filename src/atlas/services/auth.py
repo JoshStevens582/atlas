@@ -24,6 +24,7 @@ import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atlas.config import Settings
+from atlas.db.models import User
 from atlas.repositories.user_repo import UsernameTakenError, UserRepository
 
 JWT_ALGORITHM = "HS256"
@@ -40,6 +41,11 @@ _DUMMY_HASH = bcrypt.hashpw(b"not-a-real-password", bcrypt.gensalt()).decode("as
 
 class AuthError(Exception):
     pass
+
+
+def user_needs_email_verification(user: User) -> bool:
+    """Accounts with an email must verify before login; username-only accounts do not."""
+    return bool(user.email) and user.email_verified_at is None
 
 
 def hash_password(password: str) -> str:

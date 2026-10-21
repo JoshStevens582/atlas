@@ -1,0 +1,37 @@
+# Email verification (production step 14)
+
+New accounts that provide an **email at signup** must click a verification link before they can sign in. Username-only accounts (no email) work immediately — same as before, but they cannot use forgot-password.
+
+Demo accounts (alice/bob) have no email and are unchanged.
+
+## Flow
+
+1. **POST `/api/auth/signup`** with `username`, `password`, and optional `email`.
+2. If `email` is set, Atlas stores the user with `email_verified_at` unset, emails a link (when SMTP is configured), and returns a message — **no access token** until verification.
+3. The link opens the app with `?verify_token=...` in the query string.
+4. **POST `/api/auth/verify-email`** `{ "token": "..." }` — sets `email_verified_at` and deletes the token.
+5. **POST `/api/auth/resend-verification`** `{ "username": "..." }` — rate-limited; same generic message whether or not the account needs verification.
+
+**POST `/api/auth/login`** returns **403** with a clear message if the password is correct but the email is not verified yet.
+
+Existing production users who already had an email on file are **grandfathered** as verified on first boot after this upgrade (SQLite migration in `init_database`).
+
+## Settings
+
+| Variable | Meaning |
+| :--- | :--- |
+| `APP_PUBLIC_URL` | Base URL for verification links (same as password reset) |
+| `EMAIL_VERIFICATION_TTL_SECONDS` | Token lifetime (default 86400) |
+| `EMAIL_VERIFICATION_EXPOSE_TOKEN_IN_RESPONSE` | **Local dev only.** When true and SMTP is not configured, signup/resend may return `dev_verify_token` in JSON |
+| `SMTP_*` | Same outbound mail as password reset — see `docs/password_reset.md` |
+
+Verification mail will not reach real inboxes until you send from a **verified domain** (`SMTP_FROM`), not `onboarding@resend.dev`.
+
+## Domain + mail (ops)
+
+1. Register a domain and point an **A record** to your server (Rackzar: `102.203.81.249`).
+2. Set `SITE_ADDRESS=your.domain.com` and rebuild **web** (Caddy + Let's Encrypt).
+3. Set `APP_PUBLIC_URL=https://your.domain.com` and verify the domain in [Resend](https://resend.com/domains).
+4. Set `SMTP_FROM=Atlas <noreply@yourdomain.com>` and **`docker compose up -d --force-recreate api`**.
+
+Then test signup → inbox → verify link → login, and forgot-password on the same domain.

@@ -12,7 +12,9 @@ import {
   loginAsDemo,
   logout,
   resetPassword,
+  resendVerification,
   signup,
+  verifyEmail,
   streamChat,
   uploadDocument,
   waitForIngestJob,
@@ -81,13 +83,13 @@ const SUGGESTIONS = [
   },
 ];
 
-function resetTokenFromLocation(): string | null {
-  return new URLSearchParams(window.location.search).get("reset_token");
+function queryTokenFromLocation(name: "reset_token" | "verify_token"): string | null {
+  return new URLSearchParams(window.location.search).get(name);
 }
 
 export default function App() {
   const [signedIn, setSignedIn] = useState(() => {
-    if (resetTokenFromLocation()) {
+    if (queryTokenFromLocation("reset_token") || queryTokenFromLocation("verify_token")) {
       logout();
       return false;
     }
@@ -95,11 +97,24 @@ export default function App() {
   });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot" | "reset">(() =>
-    resetTokenFromLocation() ? "reset" : "login",
-  );
+  const [authMode, setAuthMode] = useState<
+    "login" | "signup" | "forgot" | "reset" | "verify" | "pending_verify"
+  >(() => {
+    if (queryTokenFromLocation("verify_token")) {
+      return "verify";
+    }
+    if (queryTokenFromLocation("reset_token")) {
+      return "reset";
+    }
+    return "login";
+  });
   const [email, setEmail] = useState("");
-  const [resetToken, setResetToken] = useState(() => resetTokenFromLocation() ?? "");
+  const [resetToken, setResetToken] = useState(
+    () => queryTokenFromLocation("reset_token") ?? "",
+  );
+  const [verifyToken, setVerifyToken] = useState(
+    () => queryTokenFromLocation("verify_token") ?? "",
+  );
   const [forgotNotice, setForgotNotice] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
@@ -129,11 +144,20 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const tokenFromUrl = params.get("reset_token");
-    if (tokenFromUrl) {
+    const resetFromUrl = params.get("reset_token");
+    if (resetFromUrl) {
       logout();
-      setResetToken(tokenFromUrl);
+      setResetToken(resetFromUrl);
       setAuthMode("reset");
+      setSignedIn(false);
+      setError(null);
+      return;
+    }
+    const verifyFromUrl = params.get("verify_token");
+    if (verifyFromUrl) {
+      logout();
+      setVerifyToken(verifyFromUrl);
+      setAuthMode("verify");
       setSignedIn(false);
       setError(null);
     }
@@ -264,10 +288,39 @@ export default function App() {
     setError(null);
     try {
       if (authMode === "signup") {
-        await signup(username.trim(), password, email);
+        const result = await signup(username.trim(), password, email);
         setPassword("");
         setEmail("");
-        setSignedIn(true);
+        if (result.access_token) {
+          setSignedIn(true);
+          return;
+        }
+        setForgotNotice(
+          result.message ??
+            "Account created. Check your email for a verification link before signing in.",
+        );
+        if (result.dev_verify_token) {
+          setVerifyToken(result.dev_verify_token);
+          setAuthMode("verify");
+        } else {
+          setAuthMode("pending_verify");
+        }
+        return;
+      }
+      if (authMode === "verify") {
+        await verifyEmail(verifyToken.trim());
+        setAuthMode("login");
+        setVerifyToken("");
+        setForgotNotice("Email verified. You can sign in now.");
+        return;
+      }
+      if (authMode === "pending_verify") {
+        const result = await resendVerification(username.trim());
+        setForgotNotice(result.message);
+        if (result.dev_verify_token) {
+          setVerifyToken(result.dev_verify_token);
+          setAuthMode("verify");
+        }
         return;
       }
       if (authMode === "forgot") {
@@ -304,6 +357,12 @@ export default function App() {
     }
     if (authMode === "reset") {
       return "Choose a new password";
+    }
+    if (authMode === "verify") {
+      return "Verify your email";
+    }
+    if (authMode === "pending_verify") {
+      return "Verify your email to sign in";
     }
     return "Sign in to your threads";
   }
@@ -376,7 +435,10 @@ export default function App() {
               </p>
             </>
           ) : null}
-          {authMode === "login" || authMode === "signup" || authMode === "forgot" ? (
+          {authMode === "login" ||
+          authMode === "signup" ||
+          authMode === "forgot" ||
+          authMode === "pending_verify" ? (
             <label>
               Username
               <input
@@ -386,9 +448,18 @@ export default function App() {
               />
             </label>
           ) : null}
+          {authMode === "verify" ? (
+            <label>
+              Verification token
+              <input
+                value={verifyToken}
+                onChange={(event) => setVerifyToken(event.target.value)}
+              />
+            </label>
+          ) : null}
           {authMode === "signup" ? (
             <label>
-              Email (optional — needed to reset password later)
+              Email (optional — verify to sign in; needed for password reset)
               <input
                 type="email"
                 autoComplete="email"
@@ -406,7 +477,7 @@ export default function App() {
               />
             </label>
           ) : null}
-          {authMode !== "forgot" ? (
+          {authMode !== "forgot" && authMode !== "verify" && authMode !== "pending_verify" ? (
             <label>
               Password
               <input
@@ -427,16 +498,26 @@ export default function App() {
               Enter your username. If the account has an email on file, we send a reset link.
             </p>
           ) : null}
+          {authMode === "pending_verify" ? (
+            <p className="login-copy">
+              Enter your username and we resend the verification link if the account still needs it.
+            </p>
+          ) : null}
+          {authMode === "verify" ? (
+            <p className="login-copy">Open the link from your email, or paste the token here.</p>
+          ) : null}
           {forgotNotice ? <p className="login-copy">{forgotNotice}</p> : null}
           {error ? <p className="error">{error}</p> : null}
           <button
             className="send"
             disabled={
-              authMode === "forgot"
+              authMode === "forgot" || authMode === "pending_verify"
                 ? !username.trim()
-                : authMode === "reset"
-                  ? !resetToken.trim() || !password
-                  : !username.trim() || !password
+                : authMode === "verify"
+                  ? !verifyToken.trim()
+                  : authMode === "reset"
+                    ? !resetToken.trim() || !password
+                    : !username.trim() || !password
             }
             type="submit"
           >
@@ -446,20 +527,37 @@ export default function App() {
                 ? "Send reset link"
                 : authMode === "reset"
                   ? "Update password"
-                  : "Sign in"}
+                  : authMode === "verify"
+                    ? "Verify email"
+                    : authMode === "pending_verify"
+                      ? "Resend verification"
+                      : "Sign in"}
           </button>
           {authMode === "login" ? (
-            <button
-              type="button"
-              className="new-chat"
-              onClick={() => {
-                setError(null);
-                setForgotNotice(null);
-                setAuthMode("forgot");
-              }}
-            >
-              Forgot password?
-            </button>
+            <>
+              <button
+                type="button"
+                className="new-chat"
+                onClick={() => {
+                  setError(null);
+                  setForgotNotice(null);
+                  setAuthMode("forgot");
+                }}
+              >
+                Forgot password?
+              </button>
+              <button
+                type="button"
+                className="new-chat"
+                onClick={() => {
+                  setError(null);
+                  setForgotNotice(null);
+                  setAuthMode("pending_verify");
+                }}
+              >
+                Resend verification email
+              </button>
+            </>
           ) : null}
           <button
             type="button"

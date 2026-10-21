@@ -76,12 +76,29 @@ def _ensure_user_email_column(connection: Connection) -> None:
         connection.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(320)"))
 
 
+def _ensure_user_email_verified_column(connection: Connection) -> None:
+    inspector = inspect(connection)
+    if not inspector.has_table("users"):
+        return
+    column_names = {column["name"] for column in inspector.get_columns("users")}
+    if "email_verified_at" not in column_names:
+        connection.execute(text("ALTER TABLE users ADD COLUMN email_verified_at DATETIME"))
+    # Existing accounts with email predate verification — treat them as verified.
+    connection.execute(
+        text(
+            "UPDATE users SET email_verified_at = created_at "
+            "WHERE email IS NOT NULL AND email_verified_at IS NULL"
+        )
+    )
+
+
 async def init_database(engine: AsyncEngine) -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.run_sync(_ensure_thread_owner_column)
         await connection.run_sync(_ensure_document_check_columns)
         await connection.run_sync(_ensure_user_email_column)
+        await connection.run_sync(_ensure_user_email_verified_column)
 
 
 async def session_iterator(

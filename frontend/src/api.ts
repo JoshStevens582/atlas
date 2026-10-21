@@ -85,17 +85,55 @@ export function login(username: string, password: string): Promise<string> {
   return loginRequest("/api/auth/login", { username, password });
 }
 
-export function signup(
+export type SignupResult = {
+  username: string;
+  message?: string | null;
+  access_token?: string | null;
+  dev_verify_token?: string | null;
+};
+
+export async function signup(
   username: string,
   password: string,
   email?: string,
-): Promise<string> {
+): Promise<SignupResult> {
   const body: { username: string; password: string; email?: string } = { username, password };
   const trimmed = email?.trim();
   if (trimmed) {
     body.email = trimmed;
   }
-  return loginRequest("/api/auth/signup", body);
+  const response = await fetch("/api/auth/signup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = await readJson<SignupResult>(response);
+  if (parsed.access_token) {
+    sessionStorage.setItem(TOKEN_KEY, parsed.access_token);
+  }
+  return parsed;
+}
+
+export async function verifyEmail(token: string): Promise<string> {
+  const response = await fetch("/api/auth/verify-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const parsed = await readJson<{ message: string }>(response);
+  return parsed.message;
+}
+
+export async function resendVerification(username: string): Promise<{
+  message: string;
+  dev_verify_token?: string | null;
+}> {
+  const response = await fetch("/api/auth/resend-verification", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username }),
+  });
+  return readJson<{ message: string; dev_verify_token?: string | null }>(response);
 }
 
 export async function forgotPassword(username: string): Promise<{

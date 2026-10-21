@@ -17,7 +17,7 @@ Demo accounts (alice/bob) have no email and cannot use this flow.
 
 | Variable | Meaning |
 | :--- | :--- |
-| `APP_PUBLIC_URL` | Base URL for reset links (e.g. `https://102-203-81-249.sslip.io`) |
+| `APP_PUBLIC_URL` | Base URL for reset links — must match how users open the site (e.g. `https://your.domain.com`) |
 | `PASSWORD_RESET_TTL_SECONDS` | Token lifetime (default 3600) |
 | `PASSWORD_RESET_EXPOSE_TOKEN_IN_RESPONSE` | **Local dev only.** When true and SMTP is not configured, `/forgot-password` returns `dev_reset_token` in JSON |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_USE_TLS` | Optional outbound mail |
@@ -43,7 +43,7 @@ Pick **one** production path:
    SMTP_PASSWORD=re_...your_sending_key...
    SMTP_FROM=Atlas <noreply@yourdomain.com>
    SMTP_USE_TLS=true
-   APP_PUBLIC_URL=https://102-203-81-249.sslip.io
+   APP_PUBLIC_URL=https://your.domain.com
    ```
 
 4. Reload the API container so it reads `.env`:

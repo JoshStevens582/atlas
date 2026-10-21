@@ -24,12 +24,29 @@ class ResetPasswordRequest(BaseModel):
 class MessageOut(BaseModel):
     message: str
     dev_reset_token: str | None = None
+    dev_verify_token: str | None = None
 
 
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     username: str
+
+
+class SignupOut(BaseModel):
+    username: str
+    message: str | None = None
+    access_token: str | None = None
+    token_type: str = "bearer"
+    dev_verify_token: str | None = None
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+
+
+class ResendVerificationRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
 
 
 class AuthUser(BaseModel):

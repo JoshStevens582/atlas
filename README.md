@@ -6,7 +6,7 @@ A recruiter-ready RAG chatbot: **retrieve first, then generate**, with the retri
 
 Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds documents with OpenAI, searches ChromaDB, quarantines retrieved text in XML tags, and streams the answer. A right-hand **Sources used** panel shows the chunks and cosine distances retrieve found. After the model writes, `[1]` in the answer marks which of those cards it used. Fake numbers are dropped.
 
-**Live demo:** [102-203-81-249.sslip.io](https://102-203-81-249.sslip.io)  
+**Live demo:** [atlas.customchatandautomation.co.za](https://atlas.customchatandautomation.co.za)  
 **Repo:** [github.com/JoshStevens582/atlas](https://github.com/JoshStevens582/atlas)
 
 ![Atlas answering "How many annual leave hours can I carry over?" with a cited answer [1], the second-model answer check, and the matching Leave types passage in the Sources used panel](docs/atlas-screenshot.png)
