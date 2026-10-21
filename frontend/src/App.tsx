@@ -87,6 +87,16 @@ function queryTokenFromLocation(name: "reset_token" | "verify_token"): string | 
   return new URLSearchParams(window.location.search).get(name);
 }
 
+function stripQueryParam(name: string): void {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(name)) {
+    return;
+  }
+  url.searchParams.delete(name);
+  const query = url.searchParams.toString();
+  window.history.replaceState({}, "", query ? `${url.pathname}?${query}` : url.pathname);
+}
+
 export default function App() {
   const [signedIn, setSignedIn] = useState(() => {
     if (queryTokenFromLocation("reset_token") || queryTokenFromLocation("verify_token")) {
@@ -116,6 +126,7 @@ export default function App() {
     () => queryTokenFromLocation("verify_token") ?? "",
   );
   const [forgotNotice, setForgotNotice] = useState<string | null>(null);
+  const [verifyAutoRunning, setVerifyAutoRunning] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -153,14 +164,44 @@ export default function App() {
       setError(null);
       return;
     }
-    const verifyFromUrl = params.get("verify_token");
-    if (verifyFromUrl) {
-      logout();
-      setVerifyToken(verifyFromUrl);
-      setAuthMode("verify");
-      setSignedIn(false);
-      setError(null);
+    const verifyFromUrl = params.get("verify_token")?.trim();
+    if (!verifyFromUrl) {
+      return;
     }
+    logout();
+    setVerifyToken(verifyFromUrl);
+    setAuthMode("verify");
+    setSignedIn(false);
+    setError(null);
+
+    let cancelled = false;
+    setVerifyAutoRunning(true);
+
+    void (async () => {
+      try {
+        await verifyEmail(verifyFromUrl);
+        if (cancelled) {
+          return;
+        }
+        stripQueryParam("verify_token");
+        setVerifyToken("");
+        setAuthMode("login");
+        setForgotNotice("Email verified. You can sign in now.");
+      } catch (reason) {
+        if (cancelled) {
+          return;
+        }
+        setError(reason instanceof Error ? reason.message : "Verification failed.");
+      } finally {
+        if (!cancelled) {
+          setVerifyAutoRunning(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -309,6 +350,7 @@ export default function App() {
       }
       if (authMode === "verify") {
         await verifyEmail(verifyToken.trim());
+        stripQueryParam("verify_token");
         setAuthMode("login");
         setVerifyToken("");
         setForgotNotice("Email verified. You can sign in now.");
@@ -504,7 +546,11 @@ export default function App() {
             </p>
           ) : null}
           {authMode === "verify" ? (
-            <p className="login-copy">Open the link from your email, or paste the token here.</p>
+            <p className="login-copy">
+              {verifyAutoRunning
+                ? "Verifying your email…"
+                : "Open the link from your email, or paste the token here."}
+            </p>
           ) : null}
           {forgotNotice ? <p className="login-copy">{forgotNotice}</p> : null}
           {error ? <p className="error">{error}</p> : null}
@@ -514,7 +560,7 @@ export default function App() {
               authMode === "forgot" || authMode === "pending_verify"
                 ? !username.trim()
                 : authMode === "verify"
-                  ? !verifyToken.trim()
+                  ? verifyAutoRunning || !verifyToken.trim()
                   : authMode === "reset"
                     ? !resetToken.trim() || !password
                     : !username.trim() || !password
@@ -528,7 +574,9 @@ export default function App() {
                 : authMode === "reset"
                   ? "Update password"
                   : authMode === "verify"
-                    ? "Verify email"
+                    ? verifyAutoRunning
+                      ? "Verifying…"
+                      : "Verify email"
                     : authMode === "pending_verify"
                       ? "Resend verification"
                       : "Sign in"}
@@ -595,8 +643,16 @@ export default function App() {
           <span>Grounded RAG chat</span>
         </div>
         <div className="health">
-          <span className={`pill ${health?.openai_configured ? "ok" : "warn"}`}>
-            {health?.openai_configured ? "OpenAI ready" : "API key missing"}
+          <span
+            className={`pill ${
+              health === null ? "" : health.openai_configured ? "ok" : "warn"
+            }`}
+          >
+            {health === null
+              ? "Checking…"
+              : health.openai_configured
+                ? "OpenAI ready"
+                : "API key missing"}
           </span>
           <span className="pill ok">ChromaDB</span>
           <span className="pill">{health?.document_count ?? 0} docs</span>
