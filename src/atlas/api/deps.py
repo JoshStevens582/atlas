@@ -83,6 +83,10 @@ async def enforce_forgot_password_rate_limit(request: Request) -> None:
     await _enforce_bucket(request, subject=_client_ip(request), bucket="forgot_password")
 
 
+async def enforce_resend_verification_rate_limit(request: Request) -> None:
+    await _enforce_bucket(request, subject=_client_ip(request), bucket="resend_verification")
+
+
 def _get_login_lockout(request: Request) -> LoginLockout | None:
     lockout = getattr(request.app.state, "login_lockout", None)
     if lockout is None:

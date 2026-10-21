@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
 import secrets
-import smtplib
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from email.message import EmailMessage
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -18,6 +15,7 @@ from atlas.db.models import User
 from atlas.repositories.password_reset_repo import PasswordResetRepository
 from atlas.repositories.user_repo import UserRepository
 from atlas.services.auth import MIN_PASSWORD_LENGTH, AuthError, hash_password
+from atlas.services.smtp import send_plain_email
 
 logger = logging.getLogger("atlas.password_reset")
 
@@ -68,7 +66,16 @@ async def request_password_reset(
         )
 
     link = reset_link(settings, raw_token)
-    sent = await _send_reset_email(settings, to_address=user.email, reset_link=link)
+    sent = await send_plain_email(
+        settings,
+        to_address=user.email,
+        subject="Atlas password reset",
+        body=(
+            "Use this link to choose a new Atlas password. It expires in one hour.\n\n"
+            f"{link}\n\n"
+            "If you did not request this, you can ignore this email."
+        ),
+    )
     if not sent:
         logger.warning(
             "password reset email not sent username=%s smtp_configured=%s",
@@ -107,49 +114,3 @@ async def reset_password_with_token(
         await session.commit()
         username = user.username
     return username
-
-
-async def _send_reset_email(settings: Settings, *, to_address: str, reset_link: str) -> bool:
-    if not settings.smtp_host.strip():
-        return False
-    sender = settings.smtp_from.strip() or settings.smtp_username.strip()
-    if not sender:
-        logger.warning("password reset SMTP missing smtp_from/smtp_username")
-        return False
-
-    message = EmailMessage()
-    message["Subject"] = "Atlas password reset"
-    message["From"] = sender
-    message["To"] = to_address
-    message.set_content(
-        "Use this link to choose a new Atlas password. It expires in one hour.\n\n"
-        f"{reset_link}\n\n"
-        "If you did not request this, you can ignore this email."
-    )
-
-    try:
-        await asyncio.to_thread(_smtp_send, settings, message)
-    except Exception as exc:
-        logger.warning("password reset SMTP failed: %s", type(exc).__name__)
-        return False
-    return True
-
-
-def _smtp_send(settings: Settings, message: EmailMessage) -> None:
-    host = settings.smtp_host.strip()
-    port = settings.smtp_port
-    username = settings.smtp_username.strip()
-    password = settings.smtp_password
-
-    if settings.smtp_use_tls:
-        with smtplib.SMTP(host, port, timeout=30) as client:
-            client.starttls()
-            if username:
-                client.login(username, password)
-            client.send_message(message)
-        return
-
-    with smtplib.SMTP(host, port, timeout=30) as client:
-        if username:
-            client.login(username, password)
-        client.send_message(message)

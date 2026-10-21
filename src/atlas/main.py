@@ -45,9 +45,9 @@ def _warn_if_smtp_test_sender(settings: Settings) -> None:
     if "resend.dev" in from_address:
         logger.warning(
             "SMTP uses a Resend test From address; many inboxes (especially Gmail) "
-            "will not show password-reset mail. Verify your own domain in Resend and "
-            "set SMTP_FROM to that domain, or use another SMTP provider. "
-            "See docs/password_reset.md."
+            "will not show password-reset or verification mail. Verify your own "
+            "domain in Resend and set SMTP_FROM to that domain, or use another "
+            "SMTP provider. See docs/password_reset.md and docs/email_verification.md."
         )
 
 

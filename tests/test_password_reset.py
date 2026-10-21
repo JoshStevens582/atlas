@@ -28,6 +28,7 @@ async def client() -> AsyncIterator[AsyncClient]:
         rate_limit_enabled=False,
         login_lockout_enabled=False,
         password_reset_expose_token_in_response=True,
+        email_verification_expose_token_in_response=True,
     )
     app = FastAPI()
     app.state.settings = settings
@@ -65,6 +66,10 @@ async def test_forgot_password_exposes_dev_token_when_user_has_email(client: Asy
         },
     )
     assert created.status_code == 200
+    verify_token = created.json()["dev_verify_token"]
+    assert isinstance(verify_token, str)
+    verified = await client.post("/api/auth/verify-email", json={"token": verify_token})
+    assert verified.status_code == 200
 
     response = await client.post(
         "/api/auth/forgot-password",
@@ -112,6 +117,11 @@ async def test_signup_rejects_duplicate_email(client: AsyncClient) -> None:
         },
     )
     assert first.status_code == 200
+    verify = await client.post(
+        "/api/auth/verify-email",
+        json={"token": first.json()["dev_verify_token"]},
+    )
+    assert verify.status_code == 200
 
     second = await client.post(
         "/api/auth/signup",
