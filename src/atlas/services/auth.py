@@ -44,7 +44,7 @@ class AuthError(Exception):
 
 
 def user_needs_email_verification(user: User) -> bool:
-    """Accounts with an email must verify before login; username-only accounts do not."""
+    """Login waits until signup email is verified (demo users have no email)."""
     return bool(user.email) and user.email_verified_at is None
 
 
@@ -65,7 +65,7 @@ async def signup_user(
     username: str,
     password: str,
     *,
-    email: str | None = None,
+    email: str,
 ) -> str:
     username = username.strip()
     if len(username) < MIN_USERNAME_LENGTH:
@@ -73,14 +73,16 @@ async def signup_user(
     if len(password) < MIN_PASSWORD_LENGTH:
         raise AuthError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
 
-    normalized_email = email.strip().lower() if email and email.strip() else None
+    normalized_email = email.strip().lower()
+    if not normalized_email or "@" not in normalized_email or normalized_email.startswith("@"):
+        raise AuthError("A valid email address is required.")
 
     password_hash = hash_password(password)
     async with session_factory() as session:
         repo = UserRepository(session)
         if await repo.get_by_username(username) is not None:
             raise AuthError(f"Username '{username}' is already taken.")
-        if normalized_email is not None and await repo.get_by_email(normalized_email) is not None:
+        if await repo.get_by_email(normalized_email) is not None:
             raise AuthError("That email is already in use.")
         try:
             user = await repo.create(username, password_hash, email=normalized_email)

@@ -42,16 +42,12 @@ async def client() -> AsyncIterator[AsyncClient]:
 
 
 @pytest.mark.asyncio
-async def test_signup_without_email_issues_token_immediately(client: AsyncClient) -> None:
+async def test_signup_rejects_missing_email(client: AsyncClient) -> None:
     response = await client.post(
         "/api/auth/signup",
         json={"username": "noemail", "password": "correct-horse-battery"},
     )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["username"] == "noemail"
-    assert isinstance(body["access_token"], str)
-    assert body.get("message") is None
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

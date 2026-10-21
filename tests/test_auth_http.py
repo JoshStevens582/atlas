@@ -87,26 +87,33 @@ async def test_login_rejects_bad_password(client: AsyncClient) -> None:
 async def test_signup_creates_a_real_account(client: AsyncClient) -> None:
     response = await client.post(
         "/api/auth/signup",
-        json={"username": "carol", "password": "correct-horse-battery"},
+        json={
+            "username": "carol",
+            "password": "correct-horse-battery",
+            "email": "carol@example.com",
+        },
     )
     assert response.status_code == 200
     body = response.json()
     assert body["username"] == "carol"
-    assert isinstance(body["access_token"], str)
+    assert body["access_token"] is None
 
-    # The new account can log in normally afterwards.
-    login_response = await client.post(
+    blocked = await client.post(
         "/api/auth/login",
         json={"username": "carol", "password": "correct-horse-battery"},
     )
-    assert login_response.status_code == 200
+    assert blocked.status_code == 403
 
 
 @pytest.mark.asyncio
 async def test_signup_rejects_duplicate_username(client: AsyncClient) -> None:
     response = await client.post(
         "/api/auth/signup",
-        json={"username": "alice", "password": "another-password"},
+        json={
+            "username": "alice",
+            "password": "another-password",
+            "email": "other@example.com",
+        },
     )
     assert response.status_code == 409
 
@@ -115,7 +122,7 @@ async def test_signup_rejects_duplicate_username(client: AsyncClient) -> None:
 async def test_signup_rejects_short_password(client: AsyncClient) -> None:
     response = await client.post(
         "/api/auth/signup",
-        json={"username": "dave", "password": "short"},
+        json={"username": "dave", "password": "short", "email": "dave@example.com"},
     )
     assert response.status_code == 422
 

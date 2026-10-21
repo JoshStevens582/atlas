@@ -9,7 +9,7 @@ class LoginRequest(BaseModel):
 class SignupRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=128)
-    email: str | None = Field(default=None, max_length=320)
+    email: str = Field(min_length=3, max_length=320)
 
 
 class ForgotPasswordRequest(BaseModel):

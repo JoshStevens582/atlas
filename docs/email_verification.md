@@ -1,14 +1,12 @@
 # Email verification (production step 14)
 
-New accounts that provide an **email at signup** must click a verification link before they can sign in. Username-only accounts (no email) work immediately — same as before, but they cannot use forgot-password.
-
-Demo accounts (alice/bob) have no email and are unchanged.
+Every **new account** must provide an email at signup and click a verification link before they can sign in. **Continue as demo user** is unchanged (seeded demo accounts have no email).
 
 ## Flow
 
-1. **POST `/api/auth/signup`** with `username`, `password`, and optional `email`.
-2. If `email` is set, Atlas stores the user with `email_verified_at` unset, emails a link (when SMTP is configured), and returns a message — **no access token** until verification.
-3. The link opens the app with `?verify_token=...` in the query string.
+1. **POST `/api/auth/signup`** with `username`, `password`, and **`email`** (required).
+2. Atlas stores the user with `email_verified_at` unset, emails a link (when SMTP is configured), and returns a message — **no access token** until verification.
+3. The link opens the app with `?verify_token=...` in the query string (auto-verify in the UI).
 4. **POST `/api/auth/verify-email`** `{ "token": "..." }` — sets `email_verified_at` and deletes the token.
 5. **POST `/api/auth/resend-verification`** `{ "username": "..." }` — rate-limited; same generic message whether or not the account needs verification.
 

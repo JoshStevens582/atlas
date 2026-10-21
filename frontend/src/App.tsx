@@ -501,10 +501,11 @@ export default function App() {
           ) : null}
           {authMode === "signup" ? (
             <label>
-              Email (optional — verify to sign in; needed for password reset)
+              Email (required — we send a verification link before you can sign in)
               <input
                 type="email"
                 autoComplete="email"
+                required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -533,7 +534,10 @@ export default function App() {
             </label>
           ) : null}
           {authMode === "signup" ? (
-            <p className="login-copy">Passwords are bcrypt-hashed — 8 characters minimum.</p>
+            <p className="login-copy">
+              Passwords are bcrypt-hashed — 8 characters minimum. Check your inbox after signup to
+              verify your email.
+            </p>
           ) : null}
           {authMode === "forgot" ? (
             <p className="login-copy">
@@ -563,7 +567,9 @@ export default function App() {
                   ? verifyAutoRunning || !verifyToken.trim()
                   : authMode === "reset"
                     ? !resetToken.trim() || !password
-                    : !username.trim() || !password
+                    : authMode === "signup"
+                      ? !username.trim() || !password || !email.trim().includes("@")
+                      : !username.trim() || !password
             }
             type="submit"
           >
