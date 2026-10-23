@@ -31,3 +31,7 @@ Disabling an account revokes all refresh rows for that user.
 | `POST` | `/api/auth/logout` |
 
 Login responses include `refresh_token` when a full session is issued (not during MFA challenge).
+
+## Frontend
+
+The SPA refreshes the access JWT in the background about two minutes before it expires, and retries once on `401` when a refresh credential is still stored. Failed refresh clears the session and returns to the login screen.
