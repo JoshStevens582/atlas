@@ -56,6 +56,7 @@ from atlas.services.mfa import (
     begin_mfa_setup,
     confirm_mfa_setup,
     disable_mfa,
+    regenerate_recovery_codes,
 )
 from atlas.services.password_reset import request_password_reset, reset_password_with_token
 
@@ -411,3 +412,24 @@ async def mfa_disable(
     except (MfaRejected, AuthError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return MessageOut(message="Authenticator turned off. Sign-in is password only again.")
+
+
+@router.post("/mfa/recovery-codes/regenerate", response_model=MfaConfirmOut)
+async def mfa_regenerate_recovery_codes(
+    payload: MfaDisableRequest,
+    request: Request,
+    user: Annotated[AuthUser, Depends(require_user)],
+) -> MfaConfirmOut:
+    """New recovery codes after password plus a current authenticator code."""
+    _require_auth_secret(request)
+    try:
+        codes = await regenerate_recovery_codes(
+            request.app.state.session_factory,
+            request.app.state.settings,
+            username=user.username,
+            password=payload.password,
+            code=payload.code,
+        )
+    except (MfaRejected, AuthError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return MfaConfirmOut(recovery_codes=codes)

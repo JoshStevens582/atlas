@@ -230,6 +230,19 @@ export async function disableMfa(password: string, code: string): Promise<string
   return parsed.message;
 }
 
+export async function regenerateRecoveryCodes(
+  password: string,
+  code: string,
+): Promise<string[]> {
+  const response = await fetch("/api/auth/mfa/recovery-codes/regenerate", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ password, code }),
+  });
+  const parsed = await readJson<{ recovery_codes: string[] }>(response);
+  return parsed.recovery_codes;
+}
+
 export function clearUserMfa(username: string): Promise<AdminUser> {
   return fetch(`/api/admin/users/${encodeURIComponent(username)}/mfa/reset`, {
     method: "POST",

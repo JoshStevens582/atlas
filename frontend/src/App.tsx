@@ -6,6 +6,7 @@ import {
   confirmMfaSetup,
   deleteDocument,
   disableMfa,
+  regenerateRecoveryCodes,
   disableUser,
   enableUser,
   fetchAdminUsers,
@@ -31,6 +32,7 @@ import {
   type LoginResult,
   type MfaSetup,
 } from "./api";
+import { copyRecoveryCodes, downloadRecoveryCodes } from "./mfaRecoveryCodes";
 import type {
   AdminUser,
   AnswerCheck,
@@ -153,6 +155,8 @@ export default function App() {
   const [mfaActionCode, setMfaActionCode] = useState("");
   const [mfaSetup, setMfaSetup] = useState<MfaSetup | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [recoveryCodesAck, setRecoveryCodesAck] = useState(false);
+  const [recoveryCodesExported, setRecoveryCodesExported] = useState(false);
   const [securityNotice, setSecurityNotice] = useState<string | null>(null);
   const [mfaBusy, setMfaBusy] = useState(false);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
@@ -578,12 +582,24 @@ export default function App() {
     }
   }
 
+  function showRecoveryCodes(codes: string[]) {
+    setRecoveryCodes(codes);
+    setRecoveryCodesAck(false);
+    setRecoveryCodesExported(false);
+  }
+
+  function dismissRecoveryCodes() {
+    setRecoveryCodes(null);
+    setRecoveryCodesAck(false);
+    setRecoveryCodesExported(false);
+  }
+
   async function onConfirmMfa() {
     setError(null);
     setMfaBusy(true);
     try {
       const codes = await confirmMfaSetup(mfaActionCode.trim());
-      setRecoveryCodes(codes);
+      showRecoveryCodes(codes);
       setMfaSetup(null);
       setMfaActionCode("");
       setMfaEnabled(true);
@@ -592,6 +608,46 @@ export default function App() {
     } finally {
       setMfaBusy(false);
     }
+  }
+
+  async function onRegenerateRecoveryCodes() {
+    setError(null);
+    setSecurityNotice(null);
+    setMfaBusy(true);
+    try {
+      const codes = await regenerateRecoveryCodes(mfaPassword, mfaActionCode.trim());
+      showRecoveryCodes(codes);
+      setMfaPassword("");
+      setMfaActionCode("");
+      setSecurityNotice("New recovery codes issued. Old unused codes no longer work.");
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Could not generate new recovery codes.",
+      );
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
+  async function onCopyRecoveryCodes() {
+    if (!recoveryCodes) {
+      return;
+    }
+    setError(null);
+    try {
+      await copyRecoveryCodes(recoveryCodes);
+      setRecoveryCodesExported(true);
+    } catch {
+      setError("Could not copy to the clipboard. Use Download instead.");
+    }
+  }
+
+  function onDownloadRecoveryCodes() {
+    if (!recoveryCodes) {
+      return;
+    }
+    downloadRecoveryCodes(recoveryCodes, signedInUsername || "account");
+    setRecoveryCodesExported(true);
   }
 
   async function onDisableMfa() {
@@ -759,8 +815,11 @@ export default function App() {
           ) : null}
           {authMode === "mfa" ? (
             <p className="login-copy">
-              Password matched for {username.trim() || "this account"}. Enter the 6-digit code from
-              your authenticator app, or one recovery code.
+              Password matched for {username.trim() || "this account"}. Open{" "}
+              <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong> on
+              your phone, find Atlas, and enter the current 6-digit code — or paste a recovery code
+              you saved. Locked out with no app and no codes? Ask an admin to clear authenticator
+              on your account (People).
             </p>
           ) : null}
           {forgotNotice ? <p className="login-copy">{forgotNotice}</p> : null}
@@ -1049,32 +1108,74 @@ export default function App() {
             {securityNotice ? <p className="login-copy" style={{ padding: "0 16px" }}>{securityNotice}</p> : null}
             <div className="people-list">
               {recoveryCodes ? (
-                <div>
+                <div className="mfa-setup">
+                  <p className="mfa-scan-warning">
+                    Atlas does not store these for you. Copy or download them now. Without your
+                    phone app <em>and</em> without these codes, you cannot sign in until an admin
+                    clears authenticator on your account.
+                  </p>
                   <p className="login-copy">
-                    Save these recovery codes now. Each one works once if you lose the phone. Atlas
-                    will not show them again.
+                    Each recovery code works once if you lose the authenticator app. Atlas will not
+                    show this list again.
                   </p>
                   <ul className="recovery-codes">
                     {recoveryCodes.map((item) => (
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
+                  <div className="recovery-actions">
+                    <button className="pill" type="button" onClick={() => void onCopyRecoveryCodes()}>
+                      Copy all
+                    </button>
+                    <button className="pill" type="button" onClick={onDownloadRecoveryCodes}>
+                      Download .txt
+                    </button>
+                  </div>
+                  <label className="recovery-ack">
+                    <input
+                      type="checkbox"
+                      checked={recoveryCodesAck}
+                      onChange={(event) => setRecoveryCodesAck(event.target.checked)}
+                    />
+                    <span>
+                      I copied or downloaded these codes and stored them somewhere safe (password
+                      manager, printout, or secure note).
+                    </span>
+                  </label>
                   <button
                     className="send"
                     type="button"
-                    onClick={() => setRecoveryCodes(null)}
+                    disabled={!recoveryCodesAck || !recoveryCodesExported}
+                    onClick={dismissRecoveryCodes}
                   >
-                    I saved these codes
+                    Continue
                   </button>
+                  {!recoveryCodesExported ? (
+                    <p className="login-copy">Use Copy all or Download before you continue.</p>
+                  ) : null}
                 </div>
               ) : mfaSetup ? (
                 <div className="mfa-setup">
+                  <p className="mfa-scan-warning">
+                    On your phone, install <strong>Google Authenticator</strong> or{" "}
+                    <strong>Microsoft Authenticator</strong>. Open that app, choose{" "}
+                    <strong>Scan QR code</strong>, and point it at this screen. Do not scan with
+                    Samsung Notes, the camera roll, or a generic QR app — those save a link and will
+                    not give you login codes.
+                  </p>
                   <img className="mfa-qr" src={mfaSetup.qr_data_uri} alt="Authenticator QR code" />
                   <p className="login-copy">
-                    Scan the QR code, or type this secret into the app. Then enter the 6-digit code
-                    to turn it on.
+                    Or in the authenticator app choose enter setup key manually and paste this
+                    secret. Then enter the 6-digit code from the app below.
                   </p>
                   <p className="mfa-secret">{mfaSetup.secret}</p>
+                  <button
+                    className="pill"
+                    type="button"
+                    onClick={() => void navigator.clipboard.writeText(mfaSetup.secret)}
+                  >
+                    Copy secret
+                  </button>
                   <label>
                     Code from the app
                     <input
@@ -1096,7 +1197,8 @@ export default function App() {
               ) : mfaEnabled ? (
                 <div className="mfa-setup">
                   <p className="login-copy">
-                    Authenticator is on. The next sign-in asks for a code after the password.
+                    Authenticator is on. Every sign-in needs your password plus a 6-digit code from
+                    the app on your phone (or a recovery code you saved).
                   </p>
                   <label>
                     Password
@@ -1116,6 +1218,18 @@ export default function App() {
                       onChange={(event) => setMfaActionCode(event.target.value)}
                     />
                   </label>
+                  <button
+                    className="pill"
+                    type="button"
+                    disabled={mfaBusy || !mfaPassword || mfaActionCode.trim().length < 6}
+                    onClick={() => void onRegenerateRecoveryCodes()}
+                  >
+                    Generate new recovery codes
+                  </button>
+                  <p className="login-copy">
+                    New backup codes need the 6-digit app code (not a recovery code). Turning off
+                    accepts either.
+                  </p>
                   <button
                     className="send"
                     type="button"

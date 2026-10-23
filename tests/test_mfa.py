@@ -1,5 +1,6 @@
 """Authenticator setup, sign-in challenge, recovery codes, and admin clear."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
@@ -24,6 +25,7 @@ from atlas.services.mfa import (
     disable_mfa,
     encrypt_totp_secret,
     hash_recovery_code,
+    regenerate_recovery_codes,
 )
 from atlas.services.totp import current_totp_code
 
@@ -250,7 +252,13 @@ async def _token(client: AsyncClient, username: str, password: str) -> str:
     return token
 
 
-async def _turn_on(client: AsyncClient, username: str, password: str) -> list[str]:
+async def _enable_mfa(
+    client: AsyncClient,
+    username: str,
+    password: str,
+    *,
+    totp_now: int | None = None,
+) -> tuple[list[str], str]:
     token = await _token(client, username, password)
     headers = {"Authorization": f"Bearer {token}"}
     setup = await client.post(
@@ -261,7 +269,8 @@ async def _turn_on(client: AsyncClient, username: str, password: str) -> list[st
     assert setup.status_code == 200
     secret = setup.json()["secret"]
     assert isinstance(secret, str)
-    code = current_totp_code(secret, now=int(datetime.now(UTC).timestamp()))
+    moment = totp_now if totp_now is not None else int(datetime.now(UTC).timestamp())
+    code = current_totp_code(secret, now=moment)
     confirmed = await client.post(
         "/api/auth/mfa/confirm",
         headers=headers,
@@ -271,7 +280,12 @@ async def _turn_on(client: AsyncClient, username: str, password: str) -> list[st
     codes = confirmed.json()["recovery_codes"]
     assert isinstance(codes, list)
     assert len(codes) == 8
-    return [str(item) for item in codes]
+    return [str(item) for item in codes], secret
+
+
+async def _turn_on(client: AsyncClient, username: str, password: str) -> list[str]:
+    codes, _secret = await _enable_mfa(client, username, password)
+    return codes
 
 
 @pytest.mark.asyncio
@@ -416,3 +430,120 @@ async def test_disable_from_the_api_returns_password_only_sign_in(client: AsyncC
     )
     assert password_only.json()["mfa_required"] is False
     assert isinstance(password_only.json()["access_token"], str)
+
+
+@pytest.mark.asyncio
+async def test_regenerate_recovery_codes_replaces_old_backups(
+    client: AsyncClient,
+) -> None:
+    old_codes, secret = await _enable_mfa(client, "bob", "secret-b")
+    challenged = await client.post(
+        "/api/auth/login",
+        json={"username": "bob", "password": "secret-b"},
+    )
+    signed_in = await client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": challenged.json()["mfa_token"], "code": old_codes[0]},
+    )
+    bob_headers = {"Authorization": f"Bearer {signed_in.json()['access_token']}"}
+    await asyncio.sleep(31)
+    app_code = current_totp_code(secret, now=int(datetime.now(UTC).timestamp()))
+
+    rejected = await client.post(
+        "/api/auth/mfa/recovery-codes/regenerate",
+        headers=bob_headers,
+        json={"password": "secret-b", "code": old_codes[1]},
+    )
+    assert rejected.status_code == 400
+
+    regenerated = await client.post(
+        "/api/auth/mfa/recovery-codes/regenerate",
+        headers=bob_headers,
+        json={"password": "secret-b", "code": app_code},
+    )
+    assert regenerated.status_code == 200
+    new_codes = regenerated.json()["recovery_codes"]
+    assert len(new_codes) == 8
+    assert new_codes != old_codes
+
+    challenged_again = await client.post(
+        "/api/auth/login",
+        json={"username": "bob", "password": "secret-b"},
+    )
+    stale = await client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": challenged_again.json()["mfa_token"], "code": old_codes[2]},
+    )
+    assert stale.status_code == 401
+
+    challenged_fresh = await client.post(
+        "/api/auth/login",
+        json={"username": "bob", "password": "secret-b"},
+    )
+    fresh = await client.post(
+        "/api/auth/login/mfa",
+        json={"mfa_token": challenged_fresh.json()["mfa_token"], "code": new_codes[0]},
+    )
+    assert fresh.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_regenerate_recovery_codes_service(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    settings = _settings()
+    settings = Settings(
+        atlas_auth_secret=settings.atlas_auth_secret,
+        atlas_demo_users="bob:secret-b",
+        rate_limit_enabled=False,
+        login_lockout_enabled=False,
+    )
+    await seed_demo_users(session_factory, settings)
+    moment = datetime(2026, 10, 23, 12, 0, tzinfo=UTC)
+    setup = await begin_mfa_setup(
+        session_factory,
+        settings,
+        username="bob",
+        password="secret-b",
+    )
+    code = current_totp_code(setup.secret, now=int(moment.timestamp()))
+    old_codes = await confirm_mfa_setup(
+        session_factory,
+        settings,
+        username="bob",
+        code=code,
+        now=moment,
+    )
+    later = moment.timestamp() + 35
+    app_code = current_totp_code(setup.secret, now=int(later))
+    with pytest.raises(MfaRejected):
+        await regenerate_recovery_codes(
+            session_factory,
+            settings,
+            username="bob",
+            password="secret-b",
+            code=old_codes[0],
+        )
+    new_codes = await regenerate_recovery_codes(
+        session_factory,
+        settings,
+        username="bob",
+        password="secret-b",
+        code=app_code,
+        now=datetime.fromtimestamp(later, tz=UTC),
+    )
+    assert len(new_codes) == 8
+    with pytest.raises(MfaRejected):
+        await accept_second_factor(
+            session_factory,
+            settings,
+            username="bob",
+            code=old_codes[1],
+        )
+    await accept_second_factor(
+        session_factory,
+        settings,
+        username="bob",
+        code=new_codes[0],
+        now=datetime.fromtimestamp(later + 35, tz=UTC),
+    )

@@ -156,6 +156,71 @@ async def confirm_mfa_setup(
     return codes
 
 
+async def verify_totp_code(
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+    *,
+    username: str,
+    code: str,
+    now: datetime | None = None,
+) -> None:
+    """Check a 6-digit authenticator code only (recovery codes do not count)."""
+    moment = now or datetime.now(UTC)
+    compact = "".join(code.split())
+    if not (compact.isdigit() and len(compact) == 6):
+        raise MfaRejected("Enter the 6-digit code from your authenticator app.")
+    async with session_factory() as session:
+        user = await UserRepository(session).get_by_username(username)
+        if user is None or user.mfa_enabled_at is None or not user.mfa_secret:
+            raise MfaRejected("That code did not match.")
+        secret = decrypt_totp_secret(settings, user.mfa_secret)
+        step = matching_totp_step(secret, compact, now=int(moment.timestamp()))
+        if step is None:
+            raise MfaRejected("That code did not match.")
+        repo = MfaRepository(session)
+        claimed = await repo.claim_totp_step(user.id, step)
+        if not claimed:
+            raise MfaRejected("That code was already used. Wait for the next code.")
+
+
+async def regenerate_recovery_codes(
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+    *,
+    username: str,
+    password: str,
+    code: str,
+    now: datetime | None = None,
+) -> list[str]:
+    """Issue a new set of recovery codes. Old unused codes stop working."""
+    async with session_factory() as session:
+        user = await UserRepository(session).get_by_username(username)
+        if user is None:
+            raise AuthError("Account not found.")
+        if user.mfa_enabled_at is None:
+            raise AuthError("Turn authenticator on before generating recovery codes.")
+        if not verify_password(password, user.password_hash):
+            raise MfaRejected("Password did not match.")
+    await verify_totp_code(
+        session_factory,
+        settings,
+        username=username,
+        code=code,
+        now=now,
+    )
+    codes = [generate_recovery_code() for _ in range(RECOVERY_CODE_COUNT)]
+    async with session_factory() as session:
+        user = await UserRepository(session).get_by_username(username)
+        if user is None or user.mfa_enabled_at is None:
+            raise AuthError("Account not found.")
+        await MfaRepository(session).replace_recovery_codes(
+            user.id,
+            [hash_recovery_code(item) for item in codes],
+        )
+    logger.info("mfa recovery codes regenerated username=%s", username)
+    return codes
+
+
 async def accept_second_factor(
     session_factory: async_sessionmaker[AsyncSession],
     settings: Settings,
