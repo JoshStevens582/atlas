@@ -7,10 +7,13 @@ can click straight in, but nothing about how they're stored is special-cased.
 
 Session tokens (``issue_access_token`` / ``verify_access_token``) are real
 JWTs (HS256, signed with ``ATLAS_AUTH_SECRET``): standard header.payload.signature
-format, `sub` + `iat` + `exp` claims, verified with PyJWT. Authenticated
-routes then load the user row so a disable or role change applies without
-waiting for the 7-day token to expire. The JWT is still who you are; the
-row is whether that account may still act.
+format, `sub` + `iat` + `exp` claims, verified with PyJWT. New tokens also
+carry ``typ=access``. A short-lived ``typ=mfa`` token only proves the
+password was accepted and must not open a session. Tokens issued before
+that claim existed have no ``typ`` and still verify until they expire.
+Authenticated routes then load the user row so a disable or role change
+applies without waiting for the 7-day token to expire. The JWT is still
+who you are; the row is whether that account may still act.
 """
 
 from __future__ import annotations
@@ -28,6 +31,8 @@ from atlas.schemas.auth import UserRole
 
 JWT_ALGORITHM = "HS256"
 TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+TOKEN_TYPE_ACCESS = "access"
+TOKEN_TYPE_MFA = "mfa"
 
 MIN_USERNAME_LENGTH = 3
 MIN_PASSWORD_LENGTH = 8
@@ -139,11 +144,24 @@ def issue_access_token(settings: Settings, username: str) -> str:
         "sub": username,
         "iat": now,
         "exp": now + timedelta(seconds=TOKEN_MAX_AGE_SECONDS),
+        "typ": TOKEN_TYPE_ACCESS,
     }
     return jwt.encode(payload, settings.atlas_auth_secret, algorithm=JWT_ALGORITHM)
 
 
-def verify_access_token(settings: Settings, token: str) -> str | None:
+def issue_mfa_challenge_token(settings: Settings, username: str) -> str:
+    """Short-lived proof that the password was correct. Not a session."""
+    now = datetime.now(UTC)
+    payload = {
+        "sub": username,
+        "iat": now,
+        "exp": now + timedelta(seconds=settings.mfa_challenge_ttl_seconds),
+        "typ": TOKEN_TYPE_MFA,
+    }
+    return jwt.encode(payload, settings.atlas_auth_secret, algorithm=JWT_ALGORITHM)
+
+
+def _decode_token(settings: Settings, token: str) -> dict[str, object] | None:
     if not token.strip() or not settings.atlas_auth_secret:
         return None
     try:
@@ -155,7 +173,38 @@ def verify_access_token(settings: Settings, token: str) -> str | None:
         )
     except jwt.InvalidTokenError:
         return None
+    if not isinstance(payload, dict):
+        return None
+    decoded: dict[str, object] = {}
+    for key, value in payload.items():
+        if not isinstance(key, str):
+            return None
+        decoded[key] = value
+    return decoded
+
+
+def _subject(payload: dict[str, object]) -> str | None:
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:
         return None
     return subject
+
+
+def verify_access_token(settings: Settings, token: str) -> str | None:
+    payload = _decode_token(settings, token)
+    if payload is None:
+        return None
+    # Missing typ: tokens issued before MFA. typ=mfa must not open a session.
+    token_type = payload.get("typ")
+    if token_type not in (None, TOKEN_TYPE_ACCESS):
+        return None
+    return _subject(payload)
+
+
+def verify_mfa_challenge_token(settings: Settings, token: str) -> str | None:
+    payload = _decode_token(settings, token)
+    if payload is None:
+        return None
+    if payload.get("typ") != TOKEN_TYPE_MFA:
+        return None
+    return _subject(payload)

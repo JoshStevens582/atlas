@@ -15,9 +15,11 @@ from atlas.services.auth import (
     authenticate_user,
     hash_password,
     issue_access_token,
+    issue_mfa_challenge_token,
     seed_demo_users,
     signup_user,
     verify_access_token,
+    verify_mfa_challenge_token,
     verify_password,
 )
 
@@ -215,3 +217,20 @@ def test_verify_rejects_alg_none_forged_token() -> None:
     settings = Settings(atlas_auth_secret="unit-test-secret")
     forged = jwt.encode({"sub": "alice"}, "", algorithm="none")
     assert verify_access_token(settings, forged) is None
+
+
+def test_mfa_challenge_is_not_a_session_and_access_token_is_not_a_challenge() -> None:
+    settings = Settings(atlas_auth_secret="unit-test-secret")
+    access = issue_access_token(settings, "alice")
+    challenge = issue_mfa_challenge_token(settings, "alice")
+    assert verify_access_token(settings, access) == "alice"
+    assert verify_access_token(settings, challenge) is None
+    assert verify_mfa_challenge_token(settings, challenge) == "alice"
+    assert verify_mfa_challenge_token(settings, access) is None
+    assert verify_mfa_challenge_token(settings, "") is None
+
+
+def test_mfa_challenge_expires() -> None:
+    settings = Settings(atlas_auth_secret="unit-test-secret", mfa_challenge_ttl_seconds=-5)
+    challenge = issue_mfa_challenge_token(settings, "alice")
+    assert verify_mfa_challenge_token(settings, challenge) is None

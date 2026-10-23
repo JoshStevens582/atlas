@@ -73,18 +73,48 @@ export function logout(): void {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-async function loginRequest(path: string, body?: unknown): Promise<string> {
+export type LoginResult = {
+  username: string;
+  mfaRequired: boolean;
+  mfaToken: string | null;
+};
+
+export type MfaSetup = {
+  secret: string;
+  otpauth_uri: string;
+  qr_data_uri: string;
+};
+
+async function loginRequest(path: string, body?: unknown): Promise<LoginResult> {
   const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const parsed = await readJson<{ access_token: string; username: string }>(response);
+  const parsed = await readJson<{
+    access_token: string | null;
+    username: string;
+    mfa_required?: boolean;
+    mfa_token?: string | null;
+  }>(response);
+  if (parsed.mfa_required) {
+    if (!parsed.mfa_token) {
+      throw new Error("Authenticator code required, but no sign-in step was issued.");
+    }
+    return {
+      username: parsed.username,
+      mfaRequired: true,
+      mfaToken: parsed.mfa_token,
+    };
+  }
+  if (!parsed.access_token) {
+    throw new Error("Sign-in did not return a session.");
+  }
   sessionStorage.setItem(TOKEN_KEY, parsed.access_token);
-  return parsed.username;
+  return { username: parsed.username, mfaRequired: false, mfaToken: null };
 }
 
-export function login(username: string, password: string): Promise<string> {
+export function login(username: string, password: string): Promise<LoginResult> {
   return loginRequest("/api/auth/login", { username, password });
 }
 
@@ -153,8 +183,58 @@ export async function resetPassword(token: string, password: string): Promise<st
 }
 
 /** One click, no typing: logs in as the seeded demo account. */
-export function loginAsDemo(): Promise<string> {
+export function loginAsDemo(): Promise<LoginResult> {
   return loginRequest("/api/auth/demo");
+}
+
+export async function completeMfaLogin(mfaToken: string, code: string): Promise<string> {
+  const response = await fetch("/api/auth/login/mfa", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mfa_token: mfaToken, code }),
+  });
+  const parsed = await readJson<{ access_token: string | null; username: string }>(response);
+  if (!parsed.access_token) {
+    throw new Error("Sign-in did not return a session.");
+  }
+  sessionStorage.setItem(TOKEN_KEY, parsed.access_token);
+  return parsed.username;
+}
+
+export async function startMfaSetup(password: string): Promise<MfaSetup> {
+  const response = await fetch("/api/auth/mfa/setup", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ password }),
+  });
+  return readJson<MfaSetup>(response);
+}
+
+export async function confirmMfaSetup(code: string): Promise<string[]> {
+  const response = await fetch("/api/auth/mfa/confirm", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ code }),
+  });
+  const parsed = await readJson<{ recovery_codes: string[] }>(response);
+  return parsed.recovery_codes;
+}
+
+export async function disableMfa(password: string, code: string): Promise<string> {
+  const response = await fetch("/api/auth/mfa/disable", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ password, code }),
+  });
+  const parsed = await readJson<{ message: string }>(response);
+  return parsed.message;
+}
+
+export function clearUserMfa(username: string): Promise<AdminUser> {
+  return fetch(`/api/admin/users/${encodeURIComponent(username)}/mfa/reset`, {
+    method: "POST",
+    headers: authHeaders(),
+  }).then((response) => readJson<AdminUser>(response));
 }
 
 export function fetchMe(): Promise<Me> {

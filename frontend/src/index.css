@@ -497,6 +497,59 @@ textarea {
   color: var(--text);
 }
 
+.mfa-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+}
+
+.mfa-setup label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mfa-setup input {
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #0a1220;
+  color: var(--text);
+  padding: 12px 14px;
+}
+
+.mfa-qr {
+  width: 180px;
+  height: 180px;
+  background: white;
+  padding: 8px;
+  border-radius: 12px;
+}
+
+.mfa-secret {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  word-break: break-all;
+}
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recovery-codes li {
+  font-family: ui-monospace, monospace;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
 @media (max-width: 1100px) {
   .app {
     grid-template-columns: 1fr;

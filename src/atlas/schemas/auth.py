@@ -33,15 +33,18 @@ class MessageOut(BaseModel):
 
 
 class TokenOut(BaseModel):
-    access_token: str
+    access_token: str | None = None
     token_type: str = "bearer"
     username: str
     role: UserRole = "user"
+    mfa_required: bool = False
+    mfa_token: str | None = None
 
 
 class MeOut(BaseModel):
     username: str
     role: UserRole
+    mfa_enabled: bool = False
 
 
 class AdminUserOut(BaseModel):
@@ -50,6 +53,7 @@ class AdminUserOut(BaseModel):
     email_verified: bool
     role: UserRole
     disabled: bool
+    mfa_enabled: bool = False
     created_at: datetime | None = None
 
 
@@ -73,6 +77,35 @@ class ResendVerificationRequest(BaseModel):
     username: str = Field(min_length=1, max_length=64)
 
 
+class MfaSetupRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class MfaCodeRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=32)
+
+
+class MfaDisableRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+    code: str = Field(min_length=6, max_length=32)
+
+
+class MfaLoginRequest(BaseModel):
+    mfa_token: str = Field(min_length=20, max_length=4000)
+    code: str = Field(min_length=6, max_length=32)
+
+
+class MfaSetupOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+    qr_data_uri: str
+
+
+class MfaConfirmOut(BaseModel):
+    recovery_codes: list[str]
+
+
 class AuthUser(BaseModel):
     username: str
     role: UserRole = "user"
+    mfa_enabled: bool = False

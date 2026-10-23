@@ -74,19 +74,27 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    # Optional today; required to receive a reset link (step 12). Step 14 may
-    # verify it.
+    # Required on public signup. Demo rows leave this empty.
     email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    # Step 15: `user` (default) or `admin`. Existing rows get `user` on column add.
+    # `user` (default) or `admin`. Existing rows get `user` on column add.
     role: Mapped[str] = mapped_column(String(32), default="user")
     disabled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
+    # Encrypted authenticator secret. Login asks for a code only once
+    # mfa_enabled_at is set — a half-finished setup does not block sign-in.
+    mfa_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mfa_enabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    # Last accepted 30-second authenticator step, so the same code cannot be reused.
+    mfa_last_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -121,6 +129,31 @@ class PasswordResetToken(Base):
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
+class MfaRecoveryCode(Base):
+    """One-time backup code for an account that lost the authenticator phone.
+
+    Only the hash is stored. ``used_at`` is set the moment a code is accepted.
+    """
+
+    __tablename__ = "mfa_recovery_codes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

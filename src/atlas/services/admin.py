@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from atlas.config import Settings
 from atlas.db.models import User
+from atlas.repositories.mfa_repo import MfaRepository
 from atlas.repositories.user_repo import (
     ROLE_ADMIN,
     ROLE_USER,
@@ -60,6 +61,7 @@ def admin_user_out(user: User) -> AdminUserOut:
         email_verified=user.email_verified_at is not None,
         role=role,
         disabled=user.disabled_at is not None,
+        mfa_enabled=user.mfa_enabled_at is not None,
         created_at=user.created_at,
     )
 
@@ -152,3 +154,27 @@ async def set_user_disabled(
         disabled,
     )
     return admin_user_out(updated)
+
+
+async def clear_user_mfa(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    actor_username: str,
+    username: str,
+) -> AdminUserOut:
+    """Turn authenticator off for someone else. The actor uses Security for their own."""
+    target = username.strip()
+    if not target:
+        raise AdminNotFoundError("User not found.")
+    if actor_username == target:
+        raise AdminError(
+            "Turn off your own authenticator from Security, with your password and a code."
+        )
+    async with session_factory() as session:
+        user = await UserRepository(session).get_by_username(target)
+        if user is None:
+            raise AdminNotFoundError("User not found.")
+        await MfaRepository(session).clear(user)
+        await session.refresh(user)
+    logger.info("admin cleared mfa actor=%s target=%s", actor_username, target)
+    return admin_user_out(user)
