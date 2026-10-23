@@ -89,6 +89,21 @@ class MfaRepository:
         await self._session.commit()
         return _one_row_changed(result)
 
+    async def replace_recovery_codes(self, user_id: str, code_hashes: list[str]) -> None:
+        """Drop unused recovery hashes and store a fresh set (regenerate flow)."""
+        await self._session.execute(
+            delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user_id)
+        )
+        for code_hash in code_hashes:
+            self._session.add(
+                MfaRecoveryCode(
+                    id=str(uuid4()),
+                    user_id=user_id,
+                    code_hash=code_hash,
+                )
+            )
+        await self._session.commit()
+
     async def consume_recovery_code(
         self,
         user_id: str,

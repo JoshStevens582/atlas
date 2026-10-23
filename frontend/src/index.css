@@ -550,6 +550,36 @@ textarea {
   padding: 8px 10px;
 }
 
+.mfa-scan-warning {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #7c5e1a;
+  background: rgba(124, 94, 26, 0.15);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recovery-ack {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.recovery-ack input {
+  margin-top: 3px;
+}
+
 @media (max-width: 1100px) {
   .app {
     grid-template-columns: 1fr;

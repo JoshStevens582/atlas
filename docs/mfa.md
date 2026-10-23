@@ -6,10 +6,11 @@ Password stays the first check. An authenticator app (Google Authenticator, 1Pas
 
 1. Sign in, open **Security**, enter the password, and choose **Set up authenticator**.
 2. Scan the QR code or type the secret into the app.
-3. Enter the 6-digit code. Atlas turns MFA on and shows **8 recovery codes once**. Save them. Each code works a single time.
+3. Enter the 6-digit code. Atlas turns MFA on and shows **8 recovery codes once**. **Copy or download** them before continuing; Atlas does not store the plain codes for you. Each code works a single time.
 4. The next sign-in: correct password returns no session. The screen asks for a code (or a recovery code). Only then is the 7-day token issued.
 5. **Turn off** from Security with the password plus a current code or an unused recovery code.
-6. An admin can **Clear authenticator** on someone else's row in People (lost phone and lost codes). An admin cannot clear their own from People; they use Security.
+6. **Generate new recovery codes** from Security with the password plus a **6-digit app code** (not a recovery code). Old unused backup codes stop working.
+7. An admin can **Clear authenticator** on someone else's row in People (lost phone and lost codes). An admin cannot clear their own from People; they use Security or a server break-glass.
 
 A setup that was started but not confirmed does **not** block sign-in.
 
@@ -32,6 +33,7 @@ Rotating `ATLAS_AUTH_SECRET` makes stored authenticator secrets unreadable, the 
 | `POST` | `/api/auth/mfa/setup` | signed in — `{ "password": "..." }` → secret, otpauth URI, QR data URI |
 | `POST` | `/api/auth/mfa/confirm` | signed in — `{ "code": "123456" }` → `{ "recovery_codes": [...] }` |
 | `POST` | `/api/auth/mfa/disable` | signed in — password + code |
+| `POST` | `/api/auth/mfa/recovery-codes/regenerate` | signed in — password + **app code only** → new recovery codes |
 | `POST` | `/api/auth/login` | password only. When MFA is on, `mfa_required` is true and `access_token` is null |
 | `POST` | `/api/auth/login/mfa` | `{ "mfa_token", "code" }` → session |
 | `POST` | `/api/admin/users/{username}/mfa/reset` | admin, other people only |
