@@ -21,6 +21,7 @@ import {
   loginAsDemo,
   logout,
   resendVerification,
+  startSessionMaintenance,
   resetPassword,
   setUserRole,
   signup,
@@ -237,6 +238,15 @@ export default function App() {
   }, []);
 
   const isAdmin = role === "admin";
+
+  useEffect(() => {
+    if (!signedIn) {
+      return;
+    }
+    return startSessionMaintenance(() => {
+      setSignedIn(false);
+    });
+  }, [signedIn]);
 
   useEffect(() => {
     if (!signedIn) {
