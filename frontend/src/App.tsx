@@ -765,10 +765,11 @@ export default function App() {
           ) : null}
           {authMode === "mfa" ? (
             <label>
-              Authenticator or recovery code
+              6-digit code from Google or Microsoft Authenticator
               <input
                 inputMode="numeric"
                 autoComplete="one-time-code"
+                placeholder="e.g. 482910"
                 value={mfaCode}
                 onChange={(event) => setMfaCode(event.target.value)}
               />
@@ -815,11 +816,12 @@ export default function App() {
           ) : null}
           {authMode === "mfa" ? (
             <p className="login-copy">
-              Password matched for {username.trim() || "this account"}. Open{" "}
-              <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong> on
-              your phone, find Atlas, and enter the current 6-digit code — or paste a recovery code
-              you saved. Locked out with no app and no codes? Ask an admin to clear authenticator
-              on your account (People).
+              Password matched for {username.trim() || "this account"}. This step is{" "}
+              <strong>not</strong> your eight backup codes from setup — open the{" "}
+              <strong>Authenticator app</strong>, tap Atlas, and type the <strong>6 digits</strong>{" "}
+              shown there (they change every ~30 seconds). Only if you lost that app, paste one saved
+              backup code instead (with or without the hyphen). Locked out? An admin clears
+              authenticator on People.
             </p>
           ) : null}
           {forgotNotice ? <p className="login-copy">{forgotNotice}</p> : null}

@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     # After a correct password, how long the sign-in screen waits for the
     # authenticator code before the person must enter the password again.
     mfa_challenge_ttl_seconds: int = 5 * 60
+    # Step 17: short access JWT + long-lived refresh row in SQLite.
+    access_token_ttl_seconds: int = 15 * 60
+    refresh_token_ttl_seconds: int = 60 * 60 * 24 * 30
+    rate_limit_refresh_per_minute: int = 30
+    rate_limit_refresh_per_day: int = 500
     email_verification_expose_token_in_response: bool = False
     rate_limit_ask_global_per_day: int = 200
     login_lockout_enabled: bool = True

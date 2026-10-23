@@ -34,11 +34,16 @@ class MessageOut(BaseModel):
 
 class TokenOut(BaseModel):
     access_token: str | None = None
+    refresh_token: str | None = None
     token_type: str = "bearer"
     username: str
     role: UserRole = "user"
     mfa_required: bool = False
     mfa_token: str | None = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=16, max_length=512)
 
 
 class MeOut(BaseModel):

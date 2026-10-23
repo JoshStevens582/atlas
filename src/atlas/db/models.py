@@ -135,6 +135,35 @@ class PasswordResetToken(Base):
     )
 
 
+class RefreshSession(Base):
+    """Long-lived refresh credential stored as a hash (production step 17).
+
+    Each login issues a new row. Rotation on ``/api/auth/refresh`` revokes the
+    old row and inserts a successor in the same ``family_id``. Reuse of a
+    revoked token revokes the whole family.
+    """
+
+    __tablename__ = "refresh_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    family_id: Mapped[str] = mapped_column(String(36), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
 class MfaRecoveryCode(Base):
     """One-time backup code for an account that lost the authenticator phone.
 
