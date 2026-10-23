@@ -11,6 +11,16 @@ import type {
 } from "./types";
 
 const TOKEN_KEY = "atlas_access_token";
+const REFRESH_KEY = "atlas_refresh_token";
+
+function storeSessionTokens(accessToken: string, refreshToken: string | null | undefined): void {
+  sessionStorage.setItem(TOKEN_KEY, accessToken);
+  if (refreshToken) {
+    sessionStorage.setItem(REFRESH_KEY, refreshToken);
+  } else {
+    sessionStorage.removeItem(REFRESH_KEY);
+  }
+}
 
 function authHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra);
@@ -70,7 +80,16 @@ export function hasSession(): boolean {
 }
 
 export function logout(): void {
+  const refresh = sessionStorage.getItem(REFRESH_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
+  if (refresh) {
+    void fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+  }
 }
 
 export type LoginResult = {
@@ -93,6 +112,7 @@ async function loginRequest(path: string, body?: unknown): Promise<LoginResult> 
   });
   const parsed = await readJson<{
     access_token: string | null;
+    refresh_token?: string | null;
     username: string;
     mfa_required?: boolean;
     mfa_token?: string | null;
@@ -110,7 +130,7 @@ async function loginRequest(path: string, body?: unknown): Promise<LoginResult> 
   if (!parsed.access_token) {
     throw new Error("Sign-in did not return a session.");
   }
-  sessionStorage.setItem(TOKEN_KEY, parsed.access_token);
+  storeSessionTokens(parsed.access_token, parsed.refresh_token);
   return { username: parsed.username, mfaRequired: false, mfaToken: null };
 }
 
@@ -193,11 +213,15 @@ export async function completeMfaLogin(mfaToken: string, code: string): Promise<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mfa_token: mfaToken, code }),
   });
-  const parsed = await readJson<{ access_token: string | null; username: string }>(response);
+  const parsed = await readJson<{
+    access_token: string | null;
+    refresh_token?: string | null;
+    username: string;
+  }>(response);
   if (!parsed.access_token) {
     throw new Error("Sign-in did not return a session.");
   }
-  sessionStorage.setItem(TOKEN_KEY, parsed.access_token);
+  storeSessionTokens(parsed.access_token, parsed.refresh_token);
   return parsed.username;
 }
 

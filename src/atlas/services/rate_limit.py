@@ -136,6 +136,11 @@ def _limits_for_bucket(settings: Settings, bucket: str) -> tuple[int, int]:
             settings.rate_limit_resend_verification_per_minute,
             settings.rate_limit_resend_verification_per_day,
         )
+    if bucket == "refresh":
+        return (
+            settings.rate_limit_refresh_per_minute,
+            settings.rate_limit_refresh_per_day,
+        )
     raise ValueError(f"Unknown rate-limit bucket '{bucket}'.")
 
 

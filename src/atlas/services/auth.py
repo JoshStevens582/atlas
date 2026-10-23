@@ -30,7 +30,8 @@ from atlas.repositories.user_repo import ROLE_ADMIN, UsernameTakenError, UserRep
 from atlas.schemas.auth import UserRole
 
 JWT_ALGORITHM = "HS256"
-TOKEN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7
+# Default access lifetime when settings do not override (step 17).
+DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 15 * 60
 TOKEN_TYPE_ACCESS = "access"
 TOKEN_TYPE_MFA = "mfa"
 
@@ -138,12 +139,18 @@ async def seed_demo_users(
                 pass  # another worker/process seeded it first; fine
 
 
-def issue_access_token(settings: Settings, username: str) -> str:
-    now = datetime.now(UTC)
+def issue_access_token(
+    settings: Settings,
+    username: str,
+    *,
+    now: datetime | None = None,
+) -> str:
+    moment = now or datetime.now(UTC)
+    ttl = settings.access_token_ttl_seconds
     payload = {
         "sub": username,
-        "iat": now,
-        "exp": now + timedelta(seconds=TOKEN_MAX_AGE_SECONDS),
+        "iat": moment,
+        "exp": moment + timedelta(seconds=ttl),
         "typ": TOKEN_TYPE_ACCESS,
     }
     return jwt.encode(payload, settings.atlas_auth_secret, algorithm=JWT_ALGORITHM)

@@ -145,8 +145,13 @@ async def set_user_disabled(
             raise AdminError("Cannot disable the last admin.")
         stamp = datetime.now(UTC) if disabled else None
         updated = await repo.set_disabled_at(user.id, stamp)
+        revoke_user_id = user.id if disabled else None
     if updated is None:
         raise AdminNotFoundError("User not found.")
+    if revoke_user_id is not None:
+        from atlas.services.refresh_tokens import revoke_all_refresh_sessions
+
+        await revoke_all_refresh_sessions(session_factory, user_id=revoke_user_id)
     logger.info(
         "admin set disabled actor=%s target=%s disabled=%s",
         actor_username,
