@@ -1,7 +1,11 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import {
+  clearUserMfa,
+  completeMfaLogin,
+  confirmMfaSetup,
   deleteDocument,
+  disableMfa,
   disableUser,
   enableUser,
   fetchAdminUsers,
@@ -10,19 +14,22 @@ import {
   fetchMe,
   fetchThread,
   fetchThreads,
-  hasSession,
   forgotPassword,
+  hasSession,
   login,
   loginAsDemo,
   logout,
-  resetPassword,
   resendVerification,
+  resetPassword,
   setUserRole,
   signup,
-  verifyEmail,
+  startMfaSetup,
   streamChat,
   uploadDocument,
+  verifyEmail,
   waitForIngestJob,
+  type LoginResult,
+  type MfaSetup,
 } from "./api";
 import type {
   AdminUser,
@@ -115,7 +122,7 @@ export default function App() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [authMode, setAuthMode] = useState<
-    "login" | "signup" | "forgot" | "reset" | "verify" | "pending_verify"
+    "login" | "signup" | "forgot" | "reset" | "verify" | "pending_verify" | "mfa"
   >(() => {
     if (queryTokenFromLocation("verify_token")) {
       return "verify";
@@ -138,6 +145,16 @@ export default function App() {
   const [role, setRole] = useState<UserRole>("user");
   const [signedInUsername, setSignedInUsername] = useState("");
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaToken, setMfaToken] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaPassword, setMfaPassword] = useState("");
+  const [mfaActionCode, setMfaActionCode] = useState("");
+  const [mfaSetup, setMfaSetup] = useState<MfaSetup | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [securityNotice, setSecurityNotice] = useState<string | null>(null);
+  const [mfaBusy, setMfaBusy] = useState(false);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -225,6 +242,7 @@ export default function App() {
       .then((me) => {
         setRole(me.role);
         setSignedInUsername(me.username);
+        setMfaEnabled(me.mfa_enabled);
       })
       .catch((reason: Error) => {
         if (reason.message === "Not authenticated." || reason.message === "This account is disabled.") {
@@ -408,9 +426,15 @@ export default function App() {
         setForgotNotice("Password updated. Sign in with your new password.");
         return;
       }
-      await login(username.trim(), password);
-      setPassword("");
-      setSignedIn(true);
+      if (authMode === "mfa") {
+        await completeMfaLogin(mfaToken, mfaCode.trim());
+        setMfaCode("");
+        setMfaToken("");
+        setAuthMode("login");
+        setSignedIn(true);
+        return;
+      }
+      finishPasswordStep(await login(username.trim(), password));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Sign-in failed.");
     }
@@ -432,15 +456,34 @@ export default function App() {
     if (authMode === "pending_verify") {
       return "Verify your email to sign in";
     }
+    if (authMode === "mfa") {
+      return "Authenticator code";
+    }
     return "Sign in to your threads";
+  }
+
+  function finishPasswordStep(result: LoginResult): void {
+    setPassword("");
+    if (result.username) {
+      setUsername(result.username);
+    }
+    if (result.mfaRequired) {
+      if (!result.mfaToken) {
+        throw new Error("Authenticator code required, but no sign-in step was issued.");
+      }
+      setMfaToken(result.mfaToken);
+      setMfaCode("");
+      setAuthMode("mfa");
+      return;
+    }
+    setSignedIn(true);
   }
 
   async function onDemoLogin() {
     setError(null);
     setDemoLoading(true);
     try {
-      await loginAsDemo();
-      setSignedIn(true);
+      finishPasswordStep(await loginAsDemo());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Demo login failed.");
     } finally {
@@ -451,9 +494,19 @@ export default function App() {
   function onLogout() {
     logout();
     setSignedIn(false);
+    setAuthMode("login");
+    setMfaToken("");
+    setMfaCode("");
     setRole("user");
     setSignedInUsername("");
     setPeopleOpen(false);
+    setSecurityOpen(false);
+    setMfaEnabled(false);
+    setMfaSetup(null);
+    setRecoveryCodes(null);
+    setMfaPassword("");
+    setMfaActionCode("");
+    setSecurityNotice(null);
     setAdminUsers([]);
     setThreadId(null);
     setMessages([]);
@@ -500,6 +553,71 @@ export default function App() {
       await refreshAdminUsers();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not update account.");
+    }
+  }
+
+  function onOpenSecurity() {
+    setError(null);
+    setPeopleOpen(false);
+    setSecurityOpen(true);
+  }
+
+  async function onStartMfa() {
+    setError(null);
+    setSecurityNotice(null);
+    setMfaBusy(true);
+    try {
+      const setup = await startMfaSetup(mfaPassword);
+      setMfaSetup(setup);
+      setMfaPassword("");
+      setMfaActionCode("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not start authenticator setup.");
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
+  async function onConfirmMfa() {
+    setError(null);
+    setMfaBusy(true);
+    try {
+      const codes = await confirmMfaSetup(mfaActionCode.trim());
+      setRecoveryCodes(codes);
+      setMfaSetup(null);
+      setMfaActionCode("");
+      setMfaEnabled(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "That code did not match.");
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
+  async function onDisableMfa() {
+    setError(null);
+    setSecurityNotice(null);
+    setMfaBusy(true);
+    try {
+      const message = await disableMfa(mfaPassword, mfaActionCode.trim());
+      setMfaEnabled(false);
+      setMfaPassword("");
+      setMfaActionCode("");
+      setSecurityNotice(message);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not turn authenticator off.");
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
+  async function onClearUserMfa(person: AdminUser) {
+    setError(null);
+    try {
+      await clearUserMfa(person.username);
+      await refreshAdminUsers();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not turn authenticator off.");
     }
   }
 
@@ -589,7 +707,21 @@ export default function App() {
               />
             </label>
           ) : null}
-          {authMode !== "forgot" && authMode !== "verify" && authMode !== "pending_verify" ? (
+          {authMode === "mfa" ? (
+            <label>
+              Authenticator or recovery code
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={mfaCode}
+                onChange={(event) => setMfaCode(event.target.value)}
+              />
+            </label>
+          ) : null}
+          {authMode !== "forgot" &&
+          authMode !== "verify" &&
+          authMode !== "pending_verify" &&
+          authMode !== "mfa" ? (
             <label>
               Password
               <input
@@ -625,20 +757,28 @@ export default function App() {
                 : "Open the link from your email, or paste the token here."}
             </p>
           ) : null}
+          {authMode === "mfa" ? (
+            <p className="login-copy">
+              Password matched for {username.trim() || "this account"}. Enter the 6-digit code from
+              your authenticator app, or one recovery code.
+            </p>
+          ) : null}
           {forgotNotice ? <p className="login-copy">{forgotNotice}</p> : null}
           {error ? <p className="error">{error}</p> : null}
           <button
             className="send"
             disabled={
-              authMode === "forgot" || authMode === "pending_verify"
-                ? !username.trim()
-                : authMode === "verify"
-                  ? verifyAutoRunning || !verifyToken.trim()
-                  : authMode === "reset"
-                    ? !resetToken.trim() || !password
-                    : authMode === "signup"
-                      ? !username.trim() || !password || !email.trim().includes("@")
-                      : !username.trim() || !password
+              authMode === "mfa"
+                ? mfaBusy || !mfaCode.trim()
+                : authMode === "forgot" || authMode === "pending_verify"
+                  ? !username.trim()
+                  : authMode === "verify"
+                    ? verifyAutoRunning || !verifyToken.trim()
+                    : authMode === "reset"
+                      ? !resetToken.trim() || !password
+                      : authMode === "signup"
+                        ? !username.trim() || !password || !email.trim().includes("@")
+                        : !username.trim() || !password
             }
             type="submit"
           >
@@ -652,8 +792,10 @@ export default function App() {
                     ? verifyAutoRunning
                       ? "Verifying…"
                       : "Verify email"
-                    : authMode === "pending_verify"
-                      ? "Resend verification"
+                  : authMode === "pending_verify"
+                    ? "Resend verification"
+                    : authMode === "mfa"
+                      ? "Confirm code"
                       : "Sign in"}
           </button>
           {authMode === "login" ? (
@@ -733,16 +875,26 @@ export default function App() {
           <span className="pill">{health?.document_count ?? 0} docs</span>
           <span className="pill">{health?.chunk_count ?? 0} chunks</span>
         </div>
-        <button className="new-chat" onClick={() => { setPeopleOpen(false); setThreadId(null); setMessages([]); setSources([]); setAnswerCheck(null); setToolCalls([]); }}>
+        <button className="new-chat" onClick={() => { setPeopleOpen(false); setSecurityOpen(false); setThreadId(null); setMessages([]); setSources([]); setAnswerCheck(null); setToolCalls([]); }}>
           New chat
         </button>
         <button className="new-chat" onClick={onLogout} type="button">
           Sign out
         </button>
+        <button
+          className={`new-chat ${securityOpen ? "active" : ""}`}
+          onClick={onOpenSecurity}
+          type="button"
+        >
+          Security
+        </button>
         {isAdmin ? (
           <button
             className={`new-chat ${peopleOpen ? "active" : ""}`}
-            onClick={() => void onOpenPeople()}
+            onClick={() => {
+              setSecurityOpen(false);
+              void onOpenPeople();
+            }}
             type="button"
           >
             People
@@ -838,6 +990,7 @@ export default function App() {
                       {person.disabled ? " · disabled" : ""}
                       {person.email ? ` · ${person.email}` : ""}
                       {person.email && !person.email_verified ? " (unverified)" : ""}
+                      {person.mfa_enabled ? " · authenticator" : ""}
                     </span>
                   </div>
                   <div className="people-actions">
@@ -862,6 +1015,15 @@ export default function App() {
                         >
                           {person.disabled ? "Enable" : "Disable"}
                         </button>
+                        {person.mfa_enabled ? (
+                          <button
+                            className="pill"
+                            type="button"
+                            onClick={() => void onClearUserMfa(person)}
+                          >
+                            Clear authenticator
+                          </button>
+                        ) : null}
                       </>
                     ) : (
                       <span className="pill ok">you</span>
@@ -869,6 +1031,124 @@ export default function App() {
                   </div>
                 </article>
               ))}
+            </div>
+          </section>
+        ) : securityOpen ? (
+          <section className="people-panel">
+            <header className="chat-header">
+              <h1>Security</h1>
+              <p>
+                Password is the first check. An authenticator app is the second. Demo sign-in stays
+                one click until you turn this on for that account.
+              </p>
+              <button className="new-chat" type="button" onClick={() => setSecurityOpen(false)}>
+                Back to chat
+              </button>
+            </header>
+            {error ? <p className="error" style={{ padding: "0 16px" }}>{error}</p> : null}
+            {securityNotice ? <p className="login-copy" style={{ padding: "0 16px" }}>{securityNotice}</p> : null}
+            <div className="people-list">
+              {recoveryCodes ? (
+                <div>
+                  <p className="login-copy">
+                    Save these recovery codes now. Each one works once if you lose the phone. Atlas
+                    will not show them again.
+                  </p>
+                  <ul className="recovery-codes">
+                    {recoveryCodes.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  <button
+                    className="send"
+                    type="button"
+                    onClick={() => setRecoveryCodes(null)}
+                  >
+                    I saved these codes
+                  </button>
+                </div>
+              ) : mfaSetup ? (
+                <div className="mfa-setup">
+                  <img className="mfa-qr" src={mfaSetup.qr_data_uri} alt="Authenticator QR code" />
+                  <p className="login-copy">
+                    Scan the QR code, or type this secret into the app. Then enter the 6-digit code
+                    to turn it on.
+                  </p>
+                  <p className="mfa-secret">{mfaSetup.secret}</p>
+                  <label>
+                    Code from the app
+                    <input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={mfaActionCode}
+                      onChange={(event) => setMfaActionCode(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="send"
+                    type="button"
+                    disabled={mfaBusy || mfaActionCode.trim().length < 6}
+                    onClick={() => void onConfirmMfa()}
+                  >
+                    Turn on authenticator
+                  </button>
+                </div>
+              ) : mfaEnabled ? (
+                <div className="mfa-setup">
+                  <p className="login-copy">
+                    Authenticator is on. The next sign-in asks for a code after the password.
+                  </p>
+                  <label>
+                    Password
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={mfaPassword}
+                      onChange={(event) => setMfaPassword(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Authenticator or recovery code
+                    <input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={mfaActionCode}
+                      onChange={(event) => setMfaActionCode(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="send"
+                    type="button"
+                    disabled={mfaBusy || !mfaPassword || mfaActionCode.trim().length < 6}
+                    onClick={() => void onDisableMfa()}
+                  >
+                    Turn off authenticator
+                  </button>
+                </div>
+              ) : (
+                <div className="mfa-setup">
+                  <p className="login-copy">
+                    Enter your password to start. A stolen session cannot turn this on by itself.
+                  </p>
+                  <label>
+                    Password
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={mfaPassword}
+                      onChange={(event) => setMfaPassword(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="send"
+                    type="button"
+                    disabled={mfaBusy || !mfaPassword}
+                    onClick={() => void onStartMfa()}
+                  >
+                    Set up authenticator
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         ) : (

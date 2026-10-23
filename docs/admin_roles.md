@@ -24,11 +24,12 @@ Then recreate the API so the process picks up the new value (`docker compose up 
 
 | Method | Path | Who |
 | :--- | :--- | :--- |
-| `GET` | `/api/auth/me` | signed-in user — `{ username, role }` |
+| `GET` | `/api/auth/me` | signed-in user — `{ username, role, mfa_enabled }` |
 | `GET` | `/api/admin/users` | admin |
 | `POST` | `/api/admin/users/{username}/role` | admin — `{ "role": "admin" \| "user" }` |
 | `POST` | `/api/admin/users/{username}/disable` | admin |
 | `POST` | `/api/admin/users/{username}/enable` | admin |
+| `POST` | `/api/admin/users/{username}/mfa/reset` | admin — turn off someone else's authenticator. Your own stays on Security. |
 | `POST` | `/api/documents/upload` | admin |
 | `DELETE` | `/api/documents/{id}` | admin |
 
@@ -36,5 +37,6 @@ Guards:
 
 - You cannot change your own role or disable yourself.
 - You cannot demote or disable the last admin.
+- You cannot clear your own authenticator from People. Use Security, with your password and a code.
 
-Login and demo login return `role` on the token response. The JWT itself still only carries `sub`; authenticated routes load the user row so disable and role changes apply without waiting seven days.
+Login and demo login return `role` on the token response. The JWT carries `sub` and, on new tokens, `typ=access`. It does not carry the role. Authenticated routes load the user row so disable and role changes apply without waiting seven days.

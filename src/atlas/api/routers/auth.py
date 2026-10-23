@@ -13,6 +13,7 @@ from atlas.api.deps import (
     record_login_outcome,
     require_user,
 )
+from atlas.db.models import User
 from atlas.repositories.user_repo import UserRepository
 from atlas.schemas.auth import (
     AuthUser,
@@ -20,6 +21,12 @@ from atlas.schemas.auth import (
     LoginRequest,
     MeOut,
     MessageOut,
+    MfaCodeRequest,
+    MfaConfirmOut,
+    MfaDisableRequest,
+    MfaLoginRequest,
+    MfaSetupOut,
+    MfaSetupRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
     SignupOut,
@@ -32,14 +39,23 @@ from atlas.services.auth import (
     AuthError,
     authenticate_user,
     issue_access_token,
+    issue_mfa_challenge_token,
     signup_user,
     user_needs_email_verification,
     user_role,
+    verify_mfa_challenge_token,
 )
 from atlas.services.email_verification import (
     resend_verification_email,
     send_verification_email_for_user,
     verify_email_with_token,
+)
+from atlas.services.mfa import (
+    MfaRejected,
+    accept_second_factor,
+    begin_mfa_setup,
+    confirm_mfa_setup,
+    disable_mfa,
 )
 from atlas.services.password_reset import request_password_reset, reset_password_with_token
 
@@ -48,6 +64,28 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 SIGNUP_VERIFY_MESSAGE = (
     "Account created. Check your email for a verification link before signing in."
 )
+
+
+def _session_token(request: Request, user: User | None, username: str) -> TokenOut:
+    """Issue a session, or a short challenge when authenticator is on.
+
+    A correct password does not clear lockout until the code is accepted.
+    The caller records that success only when this returns a session token.
+    """
+    settings = request.app.state.settings
+    role = user_role(user) if user is not None else "user"
+    if user is not None and user.mfa_enabled_at is not None:
+        return TokenOut(
+            username=username,
+            role=role,
+            mfa_required=True,
+            mfa_token=issue_mfa_challenge_token(settings, username),
+        )
+    return TokenOut(
+        access_token=issue_access_token(settings, username),
+        username=username,
+        role=role,
+    )
 
 
 def _require_auth_secret(request: Request) -> None:
@@ -106,7 +144,6 @@ async def login(
     _: Annotated[None, Depends(enforce_login_rate_limit)],
 ) -> TokenOut:
     _require_auth_secret(request)
-    settings = request.app.state.settings
     session_factory = request.app.state.session_factory
     await assert_login_not_locked(request, payload.username)
     username = await authenticate_user(
@@ -137,13 +174,11 @@ async def login(
             detail="This account is disabled.",
         )
 
+    token = _session_token(request, user, username)
+    if token.mfa_required:
+        return token
     await record_login_outcome(request, username=username, success=True)
-    role = user_role(user) if user is not None else "user"
-    return TokenOut(
-        access_token=issue_access_token(settings, username),
-        username=username,
-        role=role,
-    )
+    return token
 
 
 @router.post("/demo", response_model=TokenOut)
@@ -179,17 +214,12 @@ async def demo_login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account is disabled.",
         )
-    role = user_role(demo_user) if demo_user is not None else "user"
-    return TokenOut(
-        access_token=issue_access_token(settings, username),
-        username=username,
-        role=role,
-    )
+    return _session_token(request, demo_user, username)
 
 
 @router.get("/me", response_model=MeOut)
 async def me(user: Annotated[AuthUser, Depends(require_user)]) -> MeOut:
-    return MeOut(username=user.username, role=user.role)
+    return MeOut(username=user.username, role=user.role, mfa_enabled=user.mfa_enabled)
 
 
 @router.post("/forgot-password", response_model=MessageOut)
@@ -261,3 +291,123 @@ async def resend_verification(
         message=result.message,
         dev_verify_token=result.dev_verify_token,
     )
+
+
+@router.post("/login/mfa", response_model=TokenOut)
+async def login_mfa(
+    payload: MfaLoginRequest,
+    request: Request,
+    _: Annotated[None, Depends(enforce_login_rate_limit)],
+) -> TokenOut:
+    """Exchange a password-step challenge plus an authenticator code for a session."""
+    _require_auth_secret(request)
+    settings = request.app.state.settings
+    username = verify_mfa_challenge_token(settings, payload.mfa_token)
+    if username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="That sign-in step expired. Enter your password again.",
+        )
+    await assert_login_not_locked(request, username)
+    async with request.app.state.session_factory() as session:
+        user = await UserRepository(session).get_by_username(username)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="That sign-in step expired. Enter your password again.",
+        )
+    if user_is_disabled(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is disabled.",
+        )
+    if user.mfa_enabled_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authenticator is not on for this account.",
+        )
+    try:
+        await accept_second_factor(
+            request.app.state.session_factory,
+            settings,
+            username=username,
+            code=payload.code,
+        )
+    except MfaRejected as exc:
+        await record_login_outcome(request, username=username, success=False)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        ) from exc
+    except AuthError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await record_login_outcome(request, username=username, success=True)
+    return TokenOut(
+        access_token=issue_access_token(settings, username),
+        username=username,
+        role=user_role(user),
+    )
+
+
+@router.post("/mfa/setup", response_model=MfaSetupOut)
+async def mfa_setup(
+    payload: MfaSetupRequest,
+    request: Request,
+    user: Annotated[AuthUser, Depends(require_user)],
+) -> MfaSetupOut:
+    _require_auth_secret(request)
+    try:
+        setup = await begin_mfa_setup(
+            request.app.state.session_factory,
+            request.app.state.settings,
+            username=user.username,
+            password=payload.password,
+        )
+    except MfaRejected as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except AuthError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return MfaSetupOut(
+        secret=setup.secret,
+        otpauth_uri=setup.otpauth_uri,
+        qr_data_uri=setup.qr_data_uri,
+    )
+
+
+@router.post("/mfa/confirm", response_model=MfaConfirmOut)
+async def mfa_confirm(
+    payload: MfaCodeRequest,
+    request: Request,
+    user: Annotated[AuthUser, Depends(require_user)],
+) -> MfaConfirmOut:
+    _require_auth_secret(request)
+    try:
+        codes = await confirm_mfa_setup(
+            request.app.state.session_factory,
+            request.app.state.settings,
+            username=user.username,
+            code=payload.code,
+        )
+    except (MfaRejected, AuthError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return MfaConfirmOut(recovery_codes=codes)
+
+
+@router.post("/mfa/disable", response_model=MessageOut)
+async def mfa_disable(
+    payload: MfaDisableRequest,
+    request: Request,
+    user: Annotated[AuthUser, Depends(require_user)],
+) -> MessageOut:
+    _require_auth_secret(request)
+    try:
+        await disable_mfa(
+            request.app.state.session_factory,
+            request.app.state.settings,
+            username=user.username,
+            password=payload.password,
+            code=payload.code,
+        )
+    except (MfaRejected, AuthError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return MessageOut(message="Authenticator turned off. Sign-in is password only again.")

@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     rate_limit_resend_verification_per_minute: int = 5
     rate_limit_resend_verification_per_day: int = 20
     email_verification_ttl_seconds: int = 60 * 60 * 24
+    # After a correct password, how long the sign-in screen waits for the
+    # authenticator code before the person must enter the password again.
+    mfa_challenge_ttl_seconds: int = 5 * 60
     email_verification_expose_token_in_response: bool = False
     rate_limit_ask_global_per_day: int = 200
     login_lockout_enabled: bool = True

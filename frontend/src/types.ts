@@ -3,6 +3,7 @@ export type UserRole = "user" | "admin";
 export type Me = {
   username: string;
   role: UserRole;
+  mfa_enabled: boolean;
 };
 
 export type AdminUser = {
@@ -11,6 +12,7 @@ export type AdminUser = {
   email_verified: boolean;
   role: UserRole;
   disabled: boolean;
+  mfa_enabled: boolean;
   created_at: string | null;
 };
 

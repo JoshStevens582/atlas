@@ -105,6 +105,19 @@ def _ensure_user_role_column(connection: Connection) -> None:
         connection.execute(text("ALTER TABLE users ADD COLUMN disabled_at DATETIME"))
 
 
+def _ensure_user_mfa_columns(connection: Connection) -> None:
+    inspector = inspect(connection)
+    if not inspector.has_table("users"):
+        return
+    column_names = {column["name"] for column in inspector.get_columns("users")}
+    if "mfa_secret" not in column_names:
+        connection.execute(text("ALTER TABLE users ADD COLUMN mfa_secret TEXT"))
+    if "mfa_enabled_at" not in column_names:
+        connection.execute(text("ALTER TABLE users ADD COLUMN mfa_enabled_at DATETIME"))
+    if "mfa_last_step" not in column_names:
+        connection.execute(text("ALTER TABLE users ADD COLUMN mfa_last_step INTEGER"))
+
+
 async def init_database(engine: AsyncEngine) -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -113,6 +126,7 @@ async def init_database(engine: AsyncEngine) -> None:
         await connection.run_sync(_ensure_user_email_column)
         await connection.run_sync(_ensure_user_email_verified_column)
         await connection.run_sync(_ensure_user_role_column)
+        await connection.run_sync(_ensure_user_mfa_columns)
 
 
 async def session_iterator(

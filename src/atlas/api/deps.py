@@ -62,7 +62,11 @@ async def require_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account is disabled.",
         )
-    return AuthUser(username=user.username, role=user_role(user))
+    return AuthUser(
+        username=user.username,
+        role=user_role(user),
+        mfa_enabled=user.mfa_enabled_at is not None,
+    )
 
 
 async def require_admin(

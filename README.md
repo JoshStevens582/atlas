@@ -60,7 +60,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look, sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or **create an account** with username, password, and email — verify the inbox link before sign-in (`docs/email_verification.md`). Passwords are bcrypt-hashed in SQLite. Threads are per user. Set `ATLAS_ADMIN_USERNAMES` to your username to bootstrap the first admin (`docs/admin_roles.md`). On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick).
+Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look, sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or **create an account** with username, password, and email — verify the inbox link before sign-in (`docs/email_verification.md`). Passwords are bcrypt-hashed in SQLite. Threads are per user. Set `ATLAS_ADMIN_USERNAMES` to your username to bootstrap the first admin (`docs/admin_roles.md`). After sign-in, **Security** can turn on an authenticator app; the next sign-in asks for that code before a session is issued (`docs/mfa.md`). On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick).
 To wipe everything and re-index the handbook with self-test scores (stop the API first, Chroma and SQLite are not meant for two writers):
 
 ```powershell

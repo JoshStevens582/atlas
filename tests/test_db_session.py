@@ -7,6 +7,7 @@ from atlas.config import Settings
 from atlas.db.session import (
     _ensure_document_check_columns,
     _ensure_thread_owner_column,
+    _ensure_user_mfa_columns,
     _ensure_user_role_column,
     create_engine,
     create_session_factory,
@@ -241,6 +242,67 @@ async def test_init_database_adds_role_columns_to_an_old_users_table(
 
     assert row[0] == "user"
     assert row[1] is None
+
+
+@pytest.mark.asyncio
+async def test_init_database_adds_mfa_columns_to_an_old_users_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "CREATE TABLE users ("
+                    "id VARCHAR(36) PRIMARY KEY, username VARCHAR(64) NOT NULL, "
+                    "password_hash VARCHAR(255) NOT NULL, created_at DATETIME)"
+                )
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, password_hash) "
+                    "VALUES ('u1', 'legacy', 'hash')"
+                )
+            )
+
+        await init_database(engine)
+        await init_database(engine)
+
+        async with engine.connect() as connection:
+            row = (
+                await connection.execute(
+                    text(
+                        "SELECT mfa_secret, mfa_enabled_at, mfa_last_step "
+                        "FROM users WHERE id = 'u1'"
+                    )
+                )
+            ).one()
+            tables = {
+                table_name
+                for (table_name,) in await connection.execute(
+                    text("SELECT name FROM sqlite_master WHERE type = 'table'")
+                )
+            }
+    finally:
+        await engine.dispose()
+
+    assert row == (None, None, None)
+    assert "mfa_recovery_codes" in tables
+
+
+@pytest.mark.asyncio
+async def test_mfa_column_check_does_nothing_when_there_is_no_users_table(
+    tmp_path: Path,
+) -> None:
+    engine = create_engine(_settings(tmp_path / "atlas.db"))
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(_ensure_user_mfa_columns)
+            tables = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+    finally:
+        await engine.dispose()
+
+    assert tables == []
 
 
 @pytest.mark.asyncio
