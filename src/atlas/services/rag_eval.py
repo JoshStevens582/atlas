@@ -21,6 +21,7 @@ UNKNOWN_MARKERS = (
 EVAL_DATABASE_URL = "sqlite+aiosqlite:///./data/eval/atlas.db"
 EVAL_CHROMA_PATH = "./data/eval/chroma"
 EVAL_UPLOAD_DIR = "./data/eval/uploads"
+EVAL_FIXTURES_DIR = Path("evals/fixtures")
 
 
 def load_golden_questions(path: Path) -> list[GoldenQuestion]:
@@ -67,6 +68,14 @@ def list_ingestible_files(directory: Path) -> list[Path]:
     if not paths:
         raise FileNotFoundError(f"No ingestible documents in {directory}")
     return paths
+
+
+def list_eval_ingest_paths(handbook_dir: Path) -> list[Path]:
+    """Handbook pages plus eval-only fixtures (not shipped in the live Library)."""
+    paths = list_ingestible_files(handbook_dir)
+    if EVAL_FIXTURES_DIR.is_dir():
+        paths.extend(list_ingestible_files(EVAL_FIXTURES_DIR))
+    return sorted(paths, key=lambda path: (path.parent.name, path.name))
 
 
 def score_case(
