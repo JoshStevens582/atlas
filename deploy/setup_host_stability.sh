@@ -30,7 +30,10 @@ EOF
   sysctl --system >/dev/null
 fi
 
-chmod 755 "$repo_dir/deploy/watchdog.sh"
+chmod 755 "$repo_dir/deploy/watchdog.sh" \
+  "$repo_dir/deploy/ops_alert.sh" \
+  "$repo_dir/deploy/backup_cron.sh" \
+  "$repo_dir/deploy/check_log_disk.sh"
 
 cron_weekly="/etc/cron.d/atlas-weekly-reboot"
 cat >"$cron_weekly" <<'EOF'
@@ -48,6 +51,23 @@ chmod 644 "$cron_watchdog"
 
 touch /var/log/atlas-watchdog.log
 chmod 644 /var/log/atlas-watchdog.log
+
+cron_backup="/etc/cron.d/atlas-backup"
+cat >"$cron_backup" <<EOF
+# Nightly atlas-data backup; emails on failure when /etc/atlas-ops.env is set.
+15 2 * * * root /bin/bash $repo_dir/deploy/backup_cron.sh
+EOF
+chmod 644 "$cron_backup"
+
+cron_log_disk="/etc/cron.d/atlas-log-disk"
+cat >"$cron_log_disk" <<EOF
+# Email if durable logs exceed LOG_DISK_ALERT_BYTES (default 50 MiB).
+0 6 * * * root /bin/bash $repo_dir/deploy/check_log_disk.sh >>/var/log/atlas-log-disk.log 2>&1
+EOF
+chmod 644 "$cron_log_disk"
+
+touch /var/log/atlas-backup.log /var/log/atlas-log-disk.log
+chmod 644 /var/log/atlas-backup.log /var/log/atlas-log-disk.log
 
 echo "Swap:"
 swapon --show

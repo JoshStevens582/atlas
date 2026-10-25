@@ -13,3 +13,4 @@ htmlcov/
 .ruff_cache/
 *.egg-info/
 .DS_Store
+freelance-site-mock.html

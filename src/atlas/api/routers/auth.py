@@ -202,8 +202,7 @@ async def demo_login(
     request: Request,
     _: Annotated[None, Depends(enforce_demo_rate_limit)],
 ) -> TokenOut:
-    """One-click path for anyone just looking at the app (recruiters,
-    reviewers): logs in as the first seeded demo account with no typing.
+    """One-click path for the public demo: logs in as the first seeded demo account with no typing.
     Goes through the exact same authenticate_user() as a real login —
     it's a real account, just a pre-made one."""
     _require_auth_secret(request)

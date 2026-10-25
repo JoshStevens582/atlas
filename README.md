@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/JoshStevens582/atlas/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/JoshStevens582/atlas/actions/workflows/ci.yml)
 
-A recruiter-ready RAG chatbot: **retrieve first, then generate**, with the retrieval step visible in the UI.
+Production staff handbook chat: **retrieve first, then generate**, with the retrieval step visible in the UI.
 
 Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds documents with OpenAI, searches ChromaDB, quarantines retrieved text in XML tags, and streams the answer. A right-hand **Sources used** panel shows the chunks and cosine distances retrieve found. After the model writes, `[1]` in the answer marks which of those cards it used. Fake numbers are dropped.
 
@@ -60,7 +60,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look, sign in with `alice` / `atlas-alice` or `bob` / `atlas-bob`, or **create an account** with username, password, and email — verify the inbox link before sign-in (`docs/email_verification.md`). Passwords are bcrypt-hashed in SQLite. Threads are per user. Set `ATLAS_ADMIN_USERNAMES` to your username to bootstrap the first admin (`docs/admin_roles.md`). After sign-in, **Security** can turn on an authenticator app; the next sign-in asks for that code before a session is issued (`docs/mfa.md`). On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick).
+Open [http://localhost:5173](http://localhost:5173). Click **Continue as demo user** for a one-click look, sign in with the seeded accounts shown on the login screen (default local config), or **create an account** with username, password, and email — verify the inbox link before sign-in (`docs/email_verification.md`). Passwords are bcrypt-hashed in SQLite. Threads are per user. Set `ATLAS_ADMIN_USERNAMES` to your username to bootstrap the first admin (`docs/admin_roles.md`). After sign-in, **Security** can turn on an authenticator app; the next sign-in asks for that code before a session is issued (`docs/mfa.md`). On first start the pages in `handbook/` are indexed (without the self-test, so boot stays quick).
 To wipe everything and re-index the handbook with self-test scores (stop the API first, Chroma and SQLite are not meant for two writers):
 
 ```powershell
@@ -140,7 +140,7 @@ docker compose up -d --build
 - Without `SITE_ADDRESS` it serves plain HTTP on port 80.
 - With `SITE_ADDRESS=your.domain` in `.env`, Caddy gets and renews a free HTTPS certificate and redirects HTTP to HTTPS. DNS must point at the server and ports 80 and 443 must be open.
 - Data (SQLite, Chroma, uploads) lives in the `atlas-data` volume and survives rebuilds and restarts.
-- On the production VPS, run once after clone: `sudo bash deploy/setup_host_stability.sh` (2 GB swap, weekly reboot, five-minute health watchdog). Compose sets memory caps on `api`, `redis`, and `web`.
+- On the production VPS, run once after clone: `sudo bash deploy/setup_host_stability.sh` (swap, weekly reboot, health watchdog, backup cron with failure alerts, daily log-size check). Configure `/etc/atlas-ops.env` for alert email — `docs/ops_alerts.md`. Compose sets memory caps on `api`, `redis`, and `web`.
 - CI builds and starts this stack on every PR and checks it through the front door.
 
 ## Architecture

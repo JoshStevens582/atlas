@@ -1,0 +1,14 @@
+﻿# Secrets and local env — agent must not read these (see .cursor/rules/secrets-lockdown.mdc)
+.env
+.env.*
+!.env.example
+
+# Runtime data (logs/DB/uploads may contain sensitive payloads)
+data/
+
+# Private key material if it ever lands in the tree
+*.pem
+*.p12
+id_rsa
+id_ed25519
+id_ed25519_atlas

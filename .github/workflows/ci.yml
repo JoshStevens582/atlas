@@ -129,6 +129,9 @@ jobs:
           token=$(curl -fsS -X POST http://localhost/api/auth/demo | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
           curl -fsS -H "Authorization: Bearer $token" http://localhost/api/threads
 
+      - name: Ops alert script (dry run)
+        run: OPS_ALERT_DRY_RUN=1 deploy/ops_alert.sh "CI test" "dry run body"
+
       - name: Backup, upload and restore round trip
         # The "bucket" here is a local folder (rclone's :local: backend), so no
         # account or keys are needed. Everything else is the real code path.

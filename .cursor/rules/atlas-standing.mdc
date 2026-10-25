@@ -1,0 +1,50 @@
+---
+description: Standing Atlas build and teaching rules. Load every chat in this repo.
+alwaysApply: true
+---
+
+# Atlas — standing
+
+Canonical folder: `C:\Users\Joshua\Desktop\atlas`. Public repo.
+
+**Vault (do not ask him where it is):**
+`C:\Users\Joshua\Desktop\Dev Log\Dev Log\LLM APPLICATION AND DEVELOPMENT\Atlas`
+
+Open those notes yourself. Start with `Atlas — Next Session.md`. Do not ask for vault paths, “what’s the plan,” or a recap.
+
+## Business framing (locked 2026-10-21)
+
+**Atlas** and the **multi-tool automation app** are **production products** for Joshua’s business **Custom Chat and Automation** (`customchatandautomation.co.za`), not interview-prep demos.
+
+- Frame work as **real users, live URL, auth, mail, cost, abuse** — not “for recruiters” or portfolio theater unless he asks.
+- **Vault session notes (both):** (1) business *why* in `Atlas — Business focus.md`; (2) **`Atlas — Session <Day> YYYY-MM-DD.md`** + row in `Atlas — Build diary (index).md` + **`## Next session — … (done)`** in `Atlas — Next Session.md` — PRs, live URL, explain-back, next step — **every build day**, same pattern as steps 9–13.
+- Live product: `https://atlas.customchatandautomation.co.za`.
+
+## How we work
+
+Build → you explain in Joshua's words → he explains it back → **vault ship log + business framing** → next. Do not move on until he can say it. Do not talk him out of the 17 production steps, hybrid, citations, re-ranker, or the live URL.
+
+## Names (do not invent or rename)
+
+Ask path: `forward_ask` → `run_ask` → `retrieve` → `_call_chat_model` → maybe `run_allowlisted_tool`.
+Say **API key**, not "secret." Atlas API key = `ATLAS_AUTH_SECRET`. Different from the OpenAI API key.
+
+## Interview prep — retired (2026-10-23)
+
+Joshua is **not** preparing for interviews or job hunts. **Do not** default to interview drill, locked 8, walk phases, or recruiter framing. Vault notes `Atlas — Interview Practice`, `Atlas — Interview Drill`, etc. are **archived reference only** unless he explicitly asks. Explain-back is for **owning the live business product**, not memorizing scripts.
+
+## Product facts
+
+The Library is the TTS Handbook (21 pages in `handbook/`, US government, CC0). Demo Note and the ticket tools are gone (2026-09-30).
+Tools live in `tools.py`, not Chroma: `estimate_annual_leave` (leave balance, years of service, pay periods left) and `get_federal_holidays` (which day a holiday falls on, 2021–2100).
+The golden-set eval (`evals/questions.json`) runs on `handbook/`. Reset the live Library with `python -m atlas.reset_library`.
+If the document is swapped again: delete tools that don't fit it and write ones that do.
+
+## Code
+
+Python: `uv`, Ruff, Mypy, pytest. No blocking I/O in `async def`. No hardcoded keys.
+Do not commit `.env`. New chat when context is full — do not ask him to re-teach this file or the vault path.
+
+## Secrets
+
+Follow `.cursor/rules/secrets-lockdown.mdc`. `.cursorignore` blocks `.env`, `data/`, and key files from file tools — still obey lockdown for shell/SSH.

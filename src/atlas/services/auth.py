@@ -2,8 +2,8 @@
 
 Signup and login both go through here. Demo accounts (alice/bob) are just
 ordinary rows in the same table, seeded once on startup (see
-``seed_demo_users``) — the login screen shows their password so recruiters
-can click straight in, but nothing about how they're stored is special-cased.
+``seed_demo_users``) — the login screen can show their password for local demo;
+nothing about how they're stored is special-cased.
 
 Session tokens (``issue_access_token`` / ``verify_access_token``) are real
 JWTs (HS256, signed with ``ATLAS_AUTH_SECRET``): standard header.payload.signature

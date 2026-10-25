@@ -24,13 +24,16 @@ RCLONE_S3_ACCESS_KEY_ID=...
 RCLONE_S3_SECRET_ACCESS_KEY=...
 ```
 
-Run it once by hand to check, then schedule it nightly:
+Run it once by hand to check, then schedule it nightly (with failure email — see
+`docs/ops_alerts.md`):
 
 ```
 cd /opt/atlas && deploy/backup.sh
-echo '15 2 * * * root /opt/atlas/deploy/backup.sh >> /var/log/atlas-backup.log 2>&1' \
-  > /etc/cron.d/atlas-backup
+sudo bash deploy/setup_host_stability.sh
 ```
+
+That installs `deploy/backup_cron.sh` at 02:15 server time. To run only the
+backup without cron: `deploy/backup.sh` or `deploy/backup_cron.sh`.
 
 ## Restore
 
