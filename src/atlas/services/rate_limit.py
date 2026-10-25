@@ -41,7 +41,7 @@ class RateLimiter:
         Record one hit against minute, daily, and (for ask) global daily caps.
 
         ``subject`` is the username for ask/upload, or the client IP for
-        login/signup/demo (those routes have no logged-in user yet).
+        login/signup/demo/refresh (those routes have no logged-in user yet).
 
         Raises RateLimitExceeded when any cap is exceeded.
         """
@@ -55,6 +55,7 @@ class RateLimiter:
             "demo",
             "forgot_password",
             "resend_verification",
+            "refresh",
         }:
             raise ValueError(f"Unknown rate-limit bucket '{bucket}'.")
 

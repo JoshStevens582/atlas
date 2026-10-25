@@ -42,7 +42,7 @@ chmod 644 "$cron_weekly"
 cron_watchdog="/etc/cron.d/atlas-watchdog"
 cat >"$cron_watchdog" <<EOF
 # Restart web+api if /api/ready fails through Caddy on localhost.
-*/5 * * * * root $repo_dir/deploy/watchdog.sh >>/var/log/atlas-watchdog.log 2>&1
+*/5 * * * * root /bin/bash $repo_dir/deploy/watchdog.sh >>/var/log/atlas-watchdog.log 2>&1
 EOF
 chmod 644 "$cron_watchdog"
 

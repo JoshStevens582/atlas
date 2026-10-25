@@ -54,6 +54,15 @@ async def test_hit_refuses_a_blank_subject_without_touching_redis(subject: str) 
 
 
 @pytest.mark.asyncio
+async def test_hit_counts_a_refresh() -> None:
+    redis = ScriptedRedis()
+
+    await _limiter(redis).hit(subject="203.0.113.5", bucket="refresh")
+
+    assert redis.incr_calls == 2
+
+
+@pytest.mark.asyncio
 async def test_hit_refuses_an_unknown_bucket() -> None:
     with pytest.raises(ValueError, match="Unknown rate-limit bucket 'chatty'"):
         await _limiter(ScriptedRedis()).hit(subject="alice", bucket="chatty")
