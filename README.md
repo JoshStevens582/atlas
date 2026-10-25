@@ -173,6 +173,12 @@ uv run python -m atlas.eval_cli
 
 The same eval runs in CI on every PR (**`rag-eval`** job; repo secret `OPENAI_API_KEY`). See `docs/evals.md`.
 
+Compare the re-ranker on the same index (about twice the chat cost; local only, not CI):
+
+```powershell
+uv run python -m atlas.eval_cli --compare-rerank
+```
+
 ## License
 
 [MIT](LICENSE)
