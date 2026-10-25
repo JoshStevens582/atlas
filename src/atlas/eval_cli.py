@@ -15,7 +15,7 @@ from atlas.services.rag import RagChatService
 from atlas.services.rag_eval import (
     format_eval_report,
     isolated_eval_settings,
-    list_ingestible_files,
+    list_eval_ingest_paths,
     load_golden_questions,
     run_eval_suite,
 )
@@ -75,7 +75,7 @@ async def _async_main(questions_path: Path, docs_dir: Path) -> int:
     )
     try:
         questions = load_golden_questions(questions_path)
-        indexed = await ingest.reset_and_ingest_paths(list_ingestible_files(docs_dir))
+        indexed = await ingest.reset_and_ingest_paths(list_eval_ingest_paths(docs_dir))
         cases = await run_eval_suite(rag, questions)
         report = EvalReport(indexed_document_count=len(indexed), cases=cases)
     finally:

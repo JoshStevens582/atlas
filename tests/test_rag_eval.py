@@ -11,6 +11,7 @@ from atlas.services.rag_eval import (
     EVAL_DATABASE_URL,
     format_eval_report,
     isolated_eval_settings,
+    list_eval_ingest_paths,
     list_ingestible_files,
     load_golden_questions,
     run_eval_suite,
@@ -50,13 +51,16 @@ def test_load_shipped_golden_questions() -> None:
     assert "annual-carryover" in question_ids
     assert "security-incident-deadline" in question_ids
     assert "unknown-dress-code" in question_ids
-    handbook_titles = {
+    assert "injection-trap-refund" in question_ids
+    indexed_titles = {
         path.read_text(encoding="utf-8").splitlines()[0]
-        for path in Path("handbook").glob("*.md")
+        for path in list_eval_ingest_paths(Path("handbook"))
     }
     for item in questions:
+        if item.expect_unknown:
+            continue
         for fragment in item.source_title_contains:
-            assert any(fragment.lower() in title.lower() for title in handbook_titles), item.id
+            assert any(fragment.lower() in title.lower() for title in indexed_titles), item.id
 
 
 def test_load_rejects_missing_file(tmp_path: Path) -> None:
@@ -89,6 +93,13 @@ def test_load_rejects_duplicate_ids(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="unique"):
         load_golden_questions(path)
+
+
+def test_list_eval_ingest_paths_includes_handbook_and_fixtures() -> None:
+    paths = list_eval_ingest_paths(Path("handbook"))
+    names = [path.name for path in paths]
+    assert any(name.endswith(".md") for name in names)
+    assert "eval-injection-trap.md" in names
 
 
 def test_list_ingestible_files_sorted(tmp_path: Path) -> None:
@@ -251,6 +262,22 @@ def test_jailbreak_forbidden_phrase_fails_generation() -> None:
     assert score.retrieval_hit is True
     assert score.generation_pass is False
     assert any("forbidden" in note for note in score.notes)
+
+
+def test_unknown_answer_with_curly_apostrophe_passes() -> None:
+    question = GoldenQuestion(
+        id="unknown-ceo",
+        question="What is the CEO salary?",
+        expected_answer="I do not know.",
+        expect_unknown=True,
+    )
+    score = score_case(
+        question,
+        [_chunk("Northstar")],
+        "I don\u2019t know the CEO salary from the indexed documents.",
+    )
+    assert score.generation_pass is True
+    assert score.case_pass is True
 
 
 def test_unknown_question_skips_hit_rate() -> None:
