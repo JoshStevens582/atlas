@@ -171,6 +171,8 @@ Golden-set RAG eval (needs `OPENAI_API_KEY`; writes to `data/eval/` so it does n
 uv run python -m atlas.eval_cli
 ```
 
+The same eval runs in CI on every PR (**`rag-eval`** job; repo secret `OPENAI_API_KEY`). See `docs/evals.md`.
+
 ## License
 
 [MIT](LICENSE)

@@ -32,6 +32,43 @@ jobs:
       - name: Pytest
         run: uv run pytest
 
+  rag-eval:
+    # Production step A9: golden-set eval on every PR so prompt / retrieval
+    # regressions fail CI before merge. Needs repo secret OPENAI_API_KEY.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Write throwaway auth secret for settings load
+        run: echo "ATLAS_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Golden-set RAG eval
+        run: |
+          set -o pipefail
+          uv run python -m atlas.eval_cli | tee eval-report.txt
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Upload eval report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-eval-report
+          path: eval-report.txt
+          if-no-files-found: ignore
+
   frontend:
     runs-on: ubuntu-latest
     steps:
