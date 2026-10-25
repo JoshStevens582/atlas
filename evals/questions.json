@@ -124,6 +124,77 @@
       "question": "What is the employee stock option vesting schedule?",
       "expected_answer": "Atlas should say it does not know based on the indexed documents.",
       "expect_unknown": true
+    },
+    {
+      "id": "advanced-sick-long-illness-vague",
+      "question": "I'm likely to be out sick for a while and I'm almost out of balance — what's the most advance sick leave I can ask for, and where in the handbook does that sit versus other leave options?",
+      "expected_answer": "Up to 240 hours of advanced sick leave (term employees capped at what they will earn for the rest of the term); listed with other leave types and detailed on the advanced sick leave page.",
+      "must_contain": ["240"],
+      "source_title_contains": ["Leave types", "Advanced sick leave"],
+      "chunk_contains": [
+        "Advanced Sick Leave",
+        "240 hours of advanced sick leave"
+      ]
+    },
+    {
+      "id": "fmla-service-minimum-vague",
+      "question": "My partner is seriously ill — can I take family medical leave if I've only worked for the government a few months?",
+      "expected_answer": "FMLA requires at least one year of federal service (most veterans are immediately eligible).",
+      "must_contain": ["one year"],
+      "source_title_contains": ["Family Medical Leave"],
+      "chunk_contains": ["at least one year of federal service"]
+    },
+    {
+      "id": "vltp-donated-hours-vague",
+      "question": "I'm completely out of sick and annual leave but facing a long medical absence — can coworkers share leave with me, and what has to be true before I'm eligible?",
+      "expected_answer": "Voluntary Leave Transfer Program donations; exhausted balances and at least 24 hours anticipated negative balance, with a prolonged medical need.",
+      "must_contain": ["24"],
+      "source_title_contains": ["Leave types", "Voluntary Leave Transfer"],
+      "chunk_contains": [
+        "enroll in the Voluntary Leave Transfer Program (VLTP)",
+        "anticipated negative leave balance of at least 24 hours"
+      ]
+    },
+    {
+      "id": "travel-amended-voucher-vague",
+      "question": "My trip ran longer than what was approved — do I need to fix travel paperwork before I claim expenses, and after I submit the voucher how long until reimbursement?",
+      "expected_answer": "Amend the authorization if dates changed; voucher review and payment each take about 3-5 business days.",
+      "must_contain": ["3", "business days"],
+      "source_title_contains": ["Get reimbursed", "What to consider while traveling"],
+      "chunk_contains": [
+        "create an amended",
+        "reviewed in 3-5 business days"
+      ]
+    },
+    {
+      "id": "term-advanced-sick-vague",
+      "question": "I'm on a term appointment with about a year left — if I'm sick and already at zero balance, how far in the hole can I go on sick leave?",
+      "expected_answer": "Up to the sick leave you would earn for the rest of the term (example: 104 hours with one year / 26 pay periods left).",
+      "must_contain": ["term"],
+      "source_title_contains": ["Advanced sick leave"],
+      "chunk_contains": [
+        "If you are a term employee",
+        "104 advanced sick leave hours"
+      ]
+    },
+    {
+      "id": "password-manager-vague",
+      "question": "I've got a bunch of TTS logins — what's the recommended way to keep passwords without reusing them?",
+      "expected_answer": "Use a password manager (KeePassXC recommended), unique passwords, and strong passwords.",
+      "must_contain": ["password manager"],
+      "source_title_contains": ["Requirements for Passwords"],
+      "chunk_contains": ["use a password manager"]
+    },
+    {
+      "id": "ooo-notice-checklist-vague",
+      "question": "I'm planning to be away for a while — how far ahead should I request leave, and what should I do so the team knows I'm out?",
+      "expected_answer": "Request leave at least three business days ahead; submit HR Links leave, calendar OOO, notify team, auto-responder, Slack status, etc.",
+      "must_contain": ["three"],
+      "source_title_contains": ["Going out of office"],
+      "chunk_contains": [
+        "at least three business days in advance",
+        "Submit a leave request through HR Links"
+      ]
     }
   ]
 }
