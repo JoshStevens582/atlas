@@ -19,3 +19,5 @@ Verify on the laptop (needs `OPENAI_API_KEY`):
 ```bash
 uv run python -m atlas.eval_cli
 ```
+
+CI runs the same command in the **`rag-eval`** job when `OPENAI_API_KEY` is set as a GitHub Actions secret. See `docs/evals.md`.
