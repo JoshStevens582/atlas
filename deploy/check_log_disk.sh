@@ -37,7 +37,7 @@ if [ "$size_bytes" -lt "$threshold" ]; then
 fi
 
 mb=$((size_bytes / 1048576))
-"$repo_dir/deploy/ops_alert.sh" \
+bash "$repo_dir/deploy/ops_alert.sh" \
   "Atlas log disk high on $(hostname -s 2>/dev/null || hostname)" \
   "Durable logs under ${log_dir} use about ${mb} MiB (threshold $((threshold / 1048576)) MiB).
 Check rotation (LOG_FILE_MAX_BYTES / LOG_FILE_BACKUP_COUNT) and atlas-data volume free space.

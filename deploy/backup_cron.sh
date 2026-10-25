@@ -11,7 +11,7 @@ fi
 
 status=$?
 tail_text="$(tail -n 40 "$log_file" 2>/dev/null || true)"
-"$repo_dir/deploy/ops_alert.sh" \
+bash "$repo_dir/deploy/ops_alert.sh" \
   "Atlas backup failed on $(hostname -s 2>/dev/null || hostname)" \
   "Exit code ${status}. Last lines from ${log_file}:
 

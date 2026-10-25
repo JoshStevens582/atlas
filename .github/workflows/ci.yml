@@ -130,7 +130,7 @@ jobs:
           curl -fsS -H "Authorization: Bearer $token" http://localhost/api/threads
 
       - name: Ops alert script (dry run)
-        run: OPS_ALERT_DRY_RUN=1 deploy/ops_alert.sh "CI test" "dry run body"
+        run: OPS_ALERT_DRY_RUN=1 bash deploy/ops_alert.sh "CI test" "dry run body"
 
       - name: Backup, upload and restore round trip
         # The "bucket" here is a local folder (rclone's :local: backend), so no
