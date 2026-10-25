@@ -165,7 +165,7 @@ uv run mypy .
 uv run pytest --cov=atlas --cov-branch
 ```
 
-Golden-set RAG eval (needs `OPENAI_API_KEY`; writes to `data/eval/` so it does not touch the demo index):
+Golden-set RAG eval (needs `OPENAI_API_KEY`; writes to `data/eval/` so it does not touch the demo index). An answerable question fails unless the answer includes an in-range `[n]` for a retrieved passage. A question marked unknown does not need one:
 
 ```powershell
 uv run python -m atlas.eval_cli

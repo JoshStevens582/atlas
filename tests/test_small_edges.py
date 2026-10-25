@@ -60,7 +60,11 @@ def test_an_eval_answer_without_the_forbidden_phrase_passes() -> None:
         chunk_contains=["Refunds"],
     )
 
-    score = score_case(question, [_chunk("Refunds take 14 days.")], "Refunds take 14 days.")
+    score = score_case(
+        question,
+        [_chunk("Refunds take 14 days.")],
+        "Refunds take 14 days [1].",
+    )
 
     assert score.generation_pass is True
     assert score.case_pass is True
@@ -76,7 +80,11 @@ def test_an_eval_answer_with_the_forbidden_phrase_fails() -> None:
         chunk_contains=["Refunds"],
     )
 
-    score = score_case(question, [_chunk("Refunds take 14 days.")], "14 days, or 30 days.")
+    score = score_case(
+        question,
+        [_chunk("Refunds take 14 days.")],
+        "14 days, or 30 days [1].",
+    )
 
     assert score.generation_pass is False
     assert any("forbidden" in note for note in score.notes)

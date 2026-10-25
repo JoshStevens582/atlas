@@ -4,6 +4,7 @@ from pathlib import Path
 from atlas.config import Settings
 from atlas.schemas.chat import RetrievedChunk
 from atlas.schemas.eval import CaseScore, EvalReport, GoldenQuestion, GoldenQuestionSet
+from atlas.services.citations import parse_citation_numbers
 from atlas.services.rag import RagChatService
 from atlas.services.readers import SUPPORTED_SUFFIXES
 
@@ -75,7 +76,12 @@ def score_case(
 ) -> CaseScore:
     notes: list[str] = []
     retrieval_hit = _score_retrieval(question, retrieved_chunks, notes)
-    generation_pass = _score_generation(question, answer, notes)
+    generation_pass = _score_generation(
+        question,
+        answer,
+        notes,
+        source_count=len(retrieved_chunks),
+    )
     if retrieval_hit is False:
         case_pass = False
     else:
@@ -167,6 +173,7 @@ def _score_generation(
     question: GoldenQuestion,
     answer: str,
     notes: list[str],
+    source_count: int,
 ) -> bool:
     failed = False
     if question.expect_unknown:
@@ -178,6 +185,9 @@ def _score_generation(
             if not _contains(answer, phrase):
                 notes.append(f"answer missing {phrase!r}")
                 failed = True
+        if not parse_citation_numbers(answer, source_count):
+            notes.append("answer has no in-range [n] citation")
+            failed = True
     for phrase in question.must_not_contain:
         if _contains(answer, phrase):
             notes.append(f"answer contains forbidden {phrase!r}")
