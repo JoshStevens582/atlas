@@ -44,6 +44,9 @@ class CaseScore(BaseModel):
     generation_pass: bool
     case_pass: bool
     notes: list[str]
+    # 1-based card position of the first chunk that contains a required passage
+    # phrase. Empty for unknown questions and when no kept chunk matched.
+    first_match_rank: int | None = None
 
 
 class EvalReport(BaseModel):

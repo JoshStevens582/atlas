@@ -4,12 +4,13 @@ import pytest
 
 from atlas.config import Settings
 from atlas.schemas.chat import RetrievedChunk
-from atlas.schemas.eval import EvalReport, GoldenQuestion
+from atlas.schemas.eval import CaseScore, EvalReport, GoldenQuestion
 from atlas.services.rag import RagChatService
 from atlas.services.rag_eval import (
     EVAL_CHROMA_PATH,
     EVAL_DATABASE_URL,
     format_eval_report,
+    format_rerank_comparison,
     isolated_eval_settings,
     list_eval_ingest_paths,
     list_ingestible_files,
@@ -414,6 +415,148 @@ def test_format_eval_report_empty_cases() -> None:
     rendered = format_eval_report(EvalReport(indexed_document_count=0, cases=[]))
     assert "Hit rate:       n/a" in rendered
     assert "Cases passed:   n/a" in rendered
+
+
+def test_first_match_rank_is_the_first_card_that_contains_a_required_phrase() -> None:
+    score = score_case(
+        _northstar_question(),
+        [_chunk("unrelated leave policy"), _chunk("The codename is Northstar")],
+        "Northstar [2].",
+    )
+    assert score.retrieval_hit is True
+    assert score.first_match_rank == 2
+
+
+def test_first_match_rank_is_empty_when_no_card_matches() -> None:
+    score = score_case(_northstar_question(), [_chunk("other")], "Northstar [1].")
+    assert score.retrieval_hit is False
+    assert score.first_match_rank is None
+
+
+def test_unknown_question_has_no_first_match_rank() -> None:
+    question = GoldenQuestion(
+        id="unknown-ceo",
+        question="Salary?",
+        expected_answer="I do not know.",
+        expect_unknown=True,
+    )
+    score = score_case(question, [_chunk("Northstar")], "I do not know.")
+    assert score.first_match_rank is None
+
+
+def test_rerank_comparison_shows_the_arm_that_retrieved_and_answered() -> None:
+    with_rerank = EvalReport(
+        indexed_document_count=4,
+        cases=[
+            _case("carryover", retrieval_hit=True, generation_pass=True, first_match_rank=1),
+            _case("fmla", retrieval_hit=True, generation_pass=True, first_match_rank=2),
+        ],
+    )
+    without_rerank = EvalReport(
+        indexed_document_count=4,
+        cases=[
+            _case("carryover", retrieval_hit=True, generation_pass=True, first_match_rank=3),
+            _case("fmla", retrieval_hit=False, generation_pass=False, first_match_rank=None),
+        ],
+    )
+    rendered = format_rerank_comparison(with_rerank, without_rerank)
+    assert "Retrieval hit rate" in rendered
+    assert "2/2  (100.0%)" in rendered
+    assert "1/2  (50.0%)" in rendered
+    assert "1.00  (n=1)" in rendered
+    assert "3.00  (n=1)" in rendered
+    assert "Matching passage earlier with the re-ranker: 1" in rendered
+    assert "Only one arm found the passage:" in rendered
+    assert "carryover" in rendered
+    assert "1 -> 3" in rendered
+    assert "fmla" in rendered
+    assert "HIT / MISS" in rendered
+
+
+def test_rerank_comparison_says_when_nothing_changed() -> None:
+    report = EvalReport(
+        indexed_document_count=1,
+        cases=[_case("carryover", retrieval_hit=True, generation_pass=True, first_match_rank=1)],
+    )
+    rendered = format_rerank_comparison(report, report)
+    assert "Same first-match rank:                       1" in rendered
+    assert "No question changed retrieval, the answer score, or first-match rank." in rendered
+
+
+def test_rerank_comparison_counts_a_passage_the_baseline_ranked_earlier() -> None:
+    with_rerank = EvalReport(
+        indexed_document_count=1,
+        cases=[
+            _case("carryover", retrieval_hit=True, generation_pass=True, first_match_rank=3),
+            _case("missing", retrieval_hit=False, generation_pass=False, first_match_rank=None),
+        ],
+    )
+    without_rerank = EvalReport(
+        indexed_document_count=1,
+        cases=[
+            _case("carryover", retrieval_hit=True, generation_pass=True, first_match_rank=1),
+            _case("missing", retrieval_hit=False, generation_pass=False, first_match_rank=None),
+        ],
+    )
+    rendered = format_rerank_comparison(with_rerank, without_rerank)
+    assert _comparison_count(rendered, "Matching passage earlier without:") == "1"
+    assert _comparison_count(rendered, "Matching passage earlier with the re-ranker:") == "0"
+    assert _comparison_count(rendered, "Only one arm found the passage:") == "0"
+    assert "3 -> 1" in rendered
+    assert "missing" not in rendered.split("Questions that changed", maxsplit=1)[1]
+
+
+def _comparison_count(rendered: str, label: str) -> str:
+    for line in rendered.splitlines():
+        if line.startswith(label):
+            return line.removeprefix(label).strip()
+    raise AssertionError(f"missing comparison line {label}")
+
+
+def test_rerank_comparison_rejects_different_question_ids() -> None:
+    with_rerank = EvalReport(
+        indexed_document_count=1,
+        cases=[_case("carryover", retrieval_hit=True, generation_pass=True, first_match_rank=1)],
+    )
+    without_rerank = EvalReport(
+        indexed_document_count=1,
+        cases=[_case("fmla", retrieval_hit=True, generation_pass=True, first_match_rank=1)],
+    )
+    with pytest.raises(ValueError, match="same question ids"):
+        format_rerank_comparison(with_rerank, without_rerank)
+
+
+def test_rerank_comparison_rejects_duplicate_ids() -> None:
+    report = EvalReport(
+        indexed_document_count=1,
+        cases=[
+            _case("carryover", retrieval_hit=True, generation_pass=True, first_match_rank=1),
+            _case("carryover", retrieval_hit=False, generation_pass=False, first_match_rank=None),
+        ],
+    )
+    with pytest.raises(ValueError, match="duplicate"):
+        format_rerank_comparison(report, report)
+
+
+def _case(
+    question_id: str,
+    *,
+    retrieval_hit: bool | None,
+    generation_pass: bool,
+    first_match_rank: int | None,
+) -> CaseScore:
+    case_pass = generation_pass if retrieval_hit is not False else False
+    return CaseScore(
+        question_id=question_id,
+        question="What does the handbook say?",
+        answer="Answer [1].",
+        retrieved_titles=["Leave types"],
+        retrieval_hit=retrieval_hit,
+        generation_pass=generation_pass,
+        case_pass=case_pass,
+        notes=[],
+        first_match_rank=first_match_rank,
+    )
 
 
 @pytest.mark.asyncio
