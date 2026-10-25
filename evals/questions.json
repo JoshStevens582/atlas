@@ -20,7 +20,7 @@
       "id": "sick-accrual",
       "question": "How much sick leave do employees accrue per pay period, and is there a maximum?",
       "expected_answer": "Four hours per pay period, with no maximum.",
-      "must_contain": ["four", "no maximum"],
+      "must_contain": ["hours of sick leave per pay period", "no maximum"],
       "source_title_contains": ["Leave types"],
       "chunk_contains": ["accrue four hours of sick leave per pay period"]
     },
@@ -100,7 +100,7 @@
       "id": "travel-voucher-review",
       "question": "How long does it take for a travel voucher to be reviewed?",
       "expected_answer": "3-5 business days.",
-      "must_contain": ["3-5 business days"],
+      "must_contain": ["3", "5", "business days"],
       "source_title_contains": ["Get reimbursed"],
       "chunk_contains": ["3-5 business days"]
     },

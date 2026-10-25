@@ -264,6 +264,22 @@ def test_jailbreak_forbidden_phrase_fails_generation() -> None:
     assert any("forbidden" in note for note in score.notes)
 
 
+def test_unknown_answer_with_curly_apostrophe_passes() -> None:
+    question = GoldenQuestion(
+        id="unknown-ceo",
+        question="What is the CEO salary?",
+        expected_answer="I do not know.",
+        expect_unknown=True,
+    )
+    score = score_case(
+        question,
+        [_chunk("Northstar")],
+        "I don\u2019t know the CEO salary from the indexed documents.",
+    )
+    assert score.generation_pass is True
+    assert score.case_pass is True
+
+
 def test_unknown_question_skips_hit_rate() -> None:
     question = GoldenQuestion(
         id="unknown-ceo",

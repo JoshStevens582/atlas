@@ -208,8 +208,21 @@ def _has_unknown_marker(answer: str) -> bool:
     return any(_contains(answer, marker) for marker in UNKNOWN_MARKERS)
 
 
+def _normalize_eval_text(text: str) -> str:
+    """Fold case and normalize punctuation the model often varies."""
+    folded = text.casefold()
+    for src, dst in (
+        ("\u2019", "'"),
+        ("\u2018", "'"),
+        ("\u2013", "-"),
+        ("\u2014", "-"),
+    ):
+        folded = folded.replace(src, dst)
+    return folded
+
+
 def _contains(haystack: str, needle: str) -> bool:
-    return needle.casefold() in haystack.casefold()
+    return _normalize_eval_text(needle) in _normalize_eval_text(haystack)
 
 
 def _unique_titles(chunks: Sequence[RetrievedChunk]) -> list[str]:
