@@ -4,14 +4,19 @@ Atlas can email you when **nightly backup fails** or when **durable logs** on `a
 
 ## One-time server setup
 
-1. Create `/etc/atlas-ops.env` from `deploy/atlas-ops.env.example` (mode `600`, owner root).
-2. Set `OPS_ALERT_TO` to your inbox, `OPS_ALERT_FROM` to a verified sender on your domain, and `RESEND_API_KEY` to your Resend sending key.
-3. Point cron at the wrapper (re-run host setup or edit cron by hand):
+On the production server (reads Resend key from `/opt/atlas/.env`, does not print it):
 
 ```bash
-sudo cp deploy/atlas-ops.env.example /etc/atlas-ops.env
-sudo chmod 600 /etc/atlas-ops.env
-# edit /etc/atlas-ops.env with real values
+sudo bash /opt/atlas/deploy/bootstrap_ops_alerts.sh
+```
+
+Optional: set `OPS_ALERT_TO=you@example.com` in `/opt/atlas/.env` before running bootstrap; default is the Gmail inbox used for password-reset testing.
+
+Or create `/etc/atlas-ops.env` by hand from `deploy/atlas-ops.env.example` (mode `600`, owner root). Quote `OPS_ALERT_FROM` if it contains spaces or angle brackets.
+
+Then ensure crons are installed:
+
+```bash
 sudo bash deploy/setup_host_stability.sh
 ```
 
