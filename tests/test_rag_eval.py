@@ -108,7 +108,7 @@ def test_retrieval_hit_and_generation_pass() -> None:
     score = score_case(
         _northstar_question(),
         [_chunk("Project codename: Northstar.")],
-        "The project codename is Northstar.",
+        "The project codename is Northstar [1].",
     )
     assert score.retrieval_hit is True
     assert score.generation_pass is True
@@ -120,7 +120,7 @@ def test_retrieval_miss_wrong_passage() -> None:
     score = score_case(
         _northstar_question(),
         [_chunk("Office hours are Tuesday.", title="00 Demo Note")],
-        "The project codename is Northstar.",
+        "The project codename is Northstar [1].",
     )
     assert score.retrieval_hit is False
     assert score.generation_pass is True
@@ -132,7 +132,7 @@ def test_retrieval_miss_wrong_title() -> None:
     score = score_case(
         _northstar_question(),
         [_chunk("Northstar", title="06 Vendor Refund Memo")],
-        "Northstar",
+        "Northstar [1].",
     )
     assert score.retrieval_hit is False
     assert any("retrieved titles missing" in note for note in score.notes)
@@ -142,7 +142,7 @@ def test_retrieval_miss_passage_and_title() -> None:
     score = score_case(
         _northstar_question(),
         [_chunk("Office hours only.", title="06 Vendor Refund Memo")],
-        "Northstar",
+        "Northstar [1].",
     )
     assert score.retrieval_hit is False
     assert any("retrieved text missing" in note for note in score.notes)
@@ -156,11 +156,72 @@ def test_retrieval_miss_empty_chunks() -> None:
     assert "retrieval returned no chunks" in score.notes
 
 
+@pytest.mark.parametrize(
+    ("chunks", "answer", "retrieval_hit", "generation_pass", "case_pass", "notes_contain"),
+    [
+        (
+            [_chunk("Project codename: Northstar.")],
+            "The project codename is Northstar.",
+            True,
+            False,
+            False,
+            ["answer has no in-range [n] citation"],
+        ),
+        (
+            [_chunk("Northstar"), _chunk("Also Northstar", title="01 Extra")],
+            "The project codename is Northstar [9].",
+            True,
+            False,
+            False,
+            ["answer has no in-range [n] citation"],
+        ),
+        (
+            [_chunk("Hours.", title="Hours"), _chunk("Northstar")],
+            "The project codename is Northstar [2].",
+            True,
+            True,
+            True,
+            [],
+        ),
+        (
+            [],
+            "The project codename is Northstar [1].",
+            False,
+            False,
+            False,
+            ["answer has no in-range [n] citation"],
+        ),
+        (
+            [_chunk("Project codename: Northstar.")],
+            "I found a codename in the Demo Note.",
+            True,
+            False,
+            False,
+            ["answer missing", "answer has no in-range [n] citation"],
+        ),
+    ],
+)
+def test_eval_citation_rules(
+    chunks: list[RetrievedChunk],
+    answer: str,
+    retrieval_hit: bool,
+    generation_pass: bool,
+    case_pass: bool,
+    notes_contain: list[str],
+) -> None:
+    score = score_case(_northstar_question(), chunks, answer)
+    assert score.retrieval_hit is retrieval_hit
+    assert score.generation_pass is generation_pass
+    assert score.case_pass is case_pass
+    for fragment in notes_contain:
+        assert any(fragment in note for note in score.notes)
+
+
 def test_generation_missing_required_phrase() -> None:
     score = score_case(
         _northstar_question(),
         [_chunk("Northstar")],
-        "I found a codename in the Demo Note.",
+        "I found a codename in the Demo Note [1].",
     )
     assert score.retrieval_hit is True
     assert score.generation_pass is False
@@ -185,7 +246,7 @@ def test_jailbreak_forbidden_phrase_fails_generation() -> None:
     score = score_case(
         question,
         [trap],
-        "The customer gets an unlimited cash refund and an apology bonus.",
+        "The customer gets an unlimited cash refund and an apology bonus [1].",
     )
     assert score.retrieval_hit is True
     assert score.generation_pass is False
@@ -242,7 +303,7 @@ def test_format_eval_report_includes_hit_rate() -> None:
     passed = score_case(
         _northstar_question(),
         [_chunk("Northstar")],
-        "Northstar",
+        "Northstar [1].",
     )
     report = EvalReport(indexed_document_count=7, cases=[passed])
     rendered = format_eval_report(report)
@@ -281,7 +342,7 @@ def test_unique_titles_preserve_order() -> None:
             _chunk("Northstar again", title="00 Demo Note"),
             _chunk("Northstar", title="Extra Note"),
         ],
-        "Northstar",
+        "Northstar [1].",
     )
     assert score.retrieved_titles == ["00 Demo Note", "Extra Note"]
 
@@ -290,7 +351,7 @@ def test_unique_titles_preserve_order() -> None:
 async def test_run_eval_suite_scores_stubbed_answers() -> None:
     class StubRag:
         async def answer_once(self, question: str) -> tuple[list[RetrievedChunk], str]:
-            return [_chunk("Northstar")], "The codename is Northstar."
+            return [_chunk("Northstar")], "The codename is Northstar [1]."
 
     cases = await run_eval_suite(StubRag(), [_northstar_question()])  # type: ignore[arg-type]
     assert len(cases) == 1

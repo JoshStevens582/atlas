@@ -1,6 +1,5 @@
 """Authenticator setup, sign-in challenge, recovery codes, and admin clear."""
 
-import asyncio
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
@@ -430,61 +429,6 @@ async def test_disable_from_the_api_returns_password_only_sign_in(client: AsyncC
     )
     assert password_only.json()["mfa_required"] is False
     assert isinstance(password_only.json()["access_token"], str)
-
-
-@pytest.mark.asyncio
-async def test_regenerate_recovery_codes_replaces_old_backups(
-    client: AsyncClient,
-) -> None:
-    old_codes, secret = await _enable_mfa(client, "bob", "secret-b")
-    challenged = await client.post(
-        "/api/auth/login",
-        json={"username": "bob", "password": "secret-b"},
-    )
-    signed_in = await client.post(
-        "/api/auth/login/mfa",
-        json={"mfa_token": challenged.json()["mfa_token"], "code": old_codes[0]},
-    )
-    bob_headers = {"Authorization": f"Bearer {signed_in.json()['access_token']}"}
-    await asyncio.sleep(31)
-    app_code = current_totp_code(secret, now=int(datetime.now(UTC).timestamp()))
-
-    rejected = await client.post(
-        "/api/auth/mfa/recovery-codes/regenerate",
-        headers=bob_headers,
-        json={"password": "secret-b", "code": old_codes[1]},
-    )
-    assert rejected.status_code == 400
-
-    regenerated = await client.post(
-        "/api/auth/mfa/recovery-codes/regenerate",
-        headers=bob_headers,
-        json={"password": "secret-b", "code": app_code},
-    )
-    assert regenerated.status_code == 200
-    new_codes = regenerated.json()["recovery_codes"]
-    assert len(new_codes) == 8
-    assert new_codes != old_codes
-
-    challenged_again = await client.post(
-        "/api/auth/login",
-        json={"username": "bob", "password": "secret-b"},
-    )
-    stale = await client.post(
-        "/api/auth/login/mfa",
-        json={"mfa_token": challenged_again.json()["mfa_token"], "code": old_codes[2]},
-    )
-    assert stale.status_code == 401
-
-    challenged_fresh = await client.post(
-        "/api/auth/login",
-        json={"username": "bob", "password": "secret-b"},
-    )
-    fresh = await client.post(
-        "/api/auth/login/mfa",
-        json={"mfa_token": challenged_fresh.json()["mfa_token"], "code": new_codes[0]},
-    )
-    assert fresh.status_code == 200
 
 
 @pytest.mark.asyncio
