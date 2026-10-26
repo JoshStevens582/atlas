@@ -63,3 +63,20 @@ counter.customchatandautomation.co.za {
 		reverse_proxy counter-web:80
 	}
 }
+
+# Company marketing site (repo joshua-stevens-site, container company-web on cca-edge).
+customchatandautomation.co.za, www.customchatandautomation.co.za {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+
+	handle {
+		reverse_proxy company-web:80
+	}
+}

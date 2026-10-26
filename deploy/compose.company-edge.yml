@@ -1,0 +1,10 @@
+# After company-web is on cca-edge: docker compose -f docker-compose.yml -f deploy/compose.company-edge.yml up -d --build web
+services:
+  web:
+    networks:
+      - default
+      - cca-edge
+
+networks:
+  cca-edge:
+    external: true
