@@ -35,10 +35,8 @@ Joshua is **not** preparing for interviews or job hunts. **Do not** default to i
 
 ## Product facts
 
-The Library is the TTS Handbook (21 pages in `handbook/`, US government, CC0). Demo Note and the ticket tools are gone (2026-09-30).
-Tools live in `tools.py`, not Chroma: `estimate_annual_leave` (leave balance, years of service, pay periods left) and `get_federal_holidays` (which day a holiday falls on, 2021–2100).
-The golden-set eval (`evals/questions.json`) runs on `handbook/`. Reset the live Library with `python -m atlas.reset_library`.
-If the document is swapped again: delete tools that don't fit it and write ones that do.
+The Library is the **Cape Town Physio staff handbook** (10 pages in `handbook/`). Same narrative as Counter and Clerk. Demo is **handbook-only**: `ATLAS_TOOLS` is empty; leave/holiday calculators remain in `tools.py` for unit tests only.
+The golden-set eval (`evals/questions.json`) runs on `handbook/`. Reset the live Library with `python -m atlas.reset_library` after handbook edits.
 
 ## Code
 

@@ -87,16 +87,16 @@ function sourceDetail(chunk: RetrievedChunk): string {
 
 const SUGGESTIONS = [
   {
-    title: "How many annual leave hours can I carry over?",
-    detail: "Handbook text. Answer is cited from the Leave page.",
+    title: "How many days of annual leave can I carry over?",
+    detail: "Staff handbook — cited from the leave page.",
   },
   {
-    title: "I have 182 annual leave hours, 5 years of service and 25 pay periods left. How many hours would I lose?",
-    detail: "A calculation. Calls the estimate_annual_leave tool, then cites the carry-over rule.",
+    title: "What is the standard patient session fee?",
+    detail: "Should answer R650 from the fees page.",
   },
   {
-    title: "Which day is Independence Day observed in 2026?",
-    detail: "A date. Calls the get_federal_holidays tool.",
+    title: "Can Counter book appointments for patients?",
+    detail: "Reception and bookings — Counter answers only.",
   },
 ];
 
@@ -928,7 +928,7 @@ export default function App() {
       <aside className="panel sidebar">
         <div className="brand">
           <strong>ATLAS</strong>
-          <span>Grounded RAG chat</span>
+          <span>Cape Town Physio · staff handbook</span>
         </div>
         <div className="health">
           <span
@@ -952,6 +952,15 @@ export default function App() {
         <button className="new-chat" onClick={onLogout} type="button">
           Sign out
         </button>
+        <p className="suite-links">
+          <a href="https://counter.customchatandautomation.co.za" target="_blank" rel="noreferrer">
+            Counter
+          </a>
+          {" · "}
+          <a href="https://agent.customchatandautomation.co.za" target="_blank" rel="noreferrer">
+            Clerk
+          </a>
+        </p>
         <button
           className={`new-chat ${securityOpen ? "active" : ""}`}
           onClick={onOpenSecurity}
@@ -1281,7 +1290,7 @@ export default function App() {
           <>
         <header className="chat-header">
           <h1>{selectedTitle}</h1>
-          <p>Ask the TTS Handbook (US government, public domain). Two tools do the leave and holiday calculations. Sources used shows both.</p>
+          <p>Ask the Cape Town Physio staff handbook. Answers cite the page they came from.</p>
           <div className="pipeline">
             <div className={`step ${stage === "search" ? "active" : ""}`}>
               <b>1 · Retrieve</b>
@@ -1381,7 +1390,7 @@ export default function App() {
           ))}
           {sources.length === 0 && toolCalls.length === 0 ? (
             <p style={{ color: "var(--muted)" }}>
-              Ask a handbook question or a leave or holiday calculation. Hits and tool results land here.
+              Ask a handbook question. Retrieved passages land here.
             </p>
           ) : (
             sources.map((chunk, index) => {

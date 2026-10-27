@@ -101,12 +101,12 @@ def _eval_report(*, case_pass: bool) -> EvalReport:
             CaseScore(
                 question_id="carryover",
                 question="How much leave carries over?",
-                answer="240 hours [1].",
-                retrieved_titles=["Leave types"],
+                answer="Up to 5 days [1].",
+                retrieved_titles=["Leave and sick leave"],
                 retrieval_hit=case_pass,
                 generation_pass=case_pass,
                 case_pass=case_pass,
-                notes=[] if case_pass else ["retrieved text missing '240'"],
+                notes=[] if case_pass else ["retrieved text missing '5 days'"],
                 first_match_rank=1 if case_pass else None,
             )
         ],

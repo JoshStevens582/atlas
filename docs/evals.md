@@ -1,6 +1,6 @@
 # Golden-set RAG eval
 
-Atlas scores itself against `evals/questions.json` on the TTS Handbook (`handbook/`) plus eval-only fixtures under `evals/fixtures/` (not in the live Library). Each case checks retrieval (right passage and title), generation (`must_contain`, optional `expected_answer`), and—for answerable questions—an in-range citation `[n]` on a retrieved chunk.
+Atlas scores itself against `evals/questions.json` on the Cape Town Physio staff handbook (`handbook/`) plus eval-only fixtures under `evals/fixtures/` (not in the live Library). Each case checks retrieval (right passage and title), generation (`must_contain`, optional `expected_answer`), and—for answerable questions—an in-range citation `[n]` on a retrieved chunk.
 
 ## Run locally
 

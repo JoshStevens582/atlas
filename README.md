@@ -9,16 +9,16 @@ Atlas is not a LangChain wrapper. It is a small FastAPI + React app that embeds 
 **Live demo:** [atlas.customchatandautomation.co.za](https://atlas.customchatandautomation.co.za)  
 **Repo:** [github.com/JoshStevens582/atlas](https://github.com/JoshStevens582/atlas)
 
-![Atlas answering "How many annual leave hours can I carry over?" with a cited answer [1], the second-model answer check, and the matching Leave types passage in the Sources used panel](docs/atlas-screenshot.png)
+![Atlas answering a leave carry-over question with a cited answer [1], the second-model answer check, and the matching handbook passage in the Sources used panel](docs/atlas-screenshot.png)
 
 ## Demo script (2 minutes)
 
-The Library is 21 pages of the **TTS Handbook** (leave, overtime, travel, work schedules, security and more), the real employee handbook of a US government digital team. It is public domain, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Each page shows a `Self-test: n/n found` score.
+The Library is the **Cape Town Physio staff handbook** (leave, reception, bookings, fees, and how Atlas, Counter, and Clerk fit together). Same sample practice as Counter and Clerk. Each page shows a `Self-test: n/n found` score when re-indexed with self-test enabled. This demo is **handbook-only** (no calculation tools).
 
-1. Click **Continue as demo user**, then click **How many annual leave hours can I carry over?**
-2. The answer is **240**, with `[1]` in the sentence. Point at **Sources used**: that passage was found *before* the model wrote a word. The card says which passage `[1]` is, and `in answer` marks that the model used it. The **Answer backed by the sources** card is a second model checking the answer against those passages.
-3. Click **I have 182 annual leave hours, 5 years of service and 25 pay periods left. How many hours would I lose?** Arithmetic is not something to trust a language model with, so the model calls `estimate_annual_leave`, Atlas runs it, and a tool card shows 332 projected hours and **92** lost to the 240 cap. The rule itself still comes from the handbook.
-4. Click **Which day is Independence Day observed in 2026?** The model calls `get_federal_holidays`. The tool card shows Saturday 4 July, observed Friday 3 July.
+1. Click **Continue as demo user**, then click **How many days of annual leave can I carry over?**
+2. The answer should be **up to 5 days**, with `[1]` in the sentence. Point at **Sources used**: that passage was found *before* the model wrote a word. The card says which passage `[1]` is, and `in answer` marks that the model used it. The **Answer backed by the sources** card is a second model checking the answer against those passages.
+3. Click **What is the standard patient session fee?** The answer should be **R650**, cited from the fees page in the handbook.
+4. Click **Can Counter book appointments for patients?** The answer should say Counter does **not** book; Clerk handles approvals for diary slots.
 5. If you are signed in as an **admin**, upload one of your own `.md` / `.txt` / `.pdf` files and ask a question only that file can answer. The Library scores the new file with the same self-test. With a longer file, the cards are labelled `vector`, `lexical`, or `both`, and the re-ranker puts the most useful passage first. Demo users can Ask and read the Library; they cannot add or remove documents.
 
 ## Stack

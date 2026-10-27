@@ -1,108 +1,84 @@
 {
   "questions": [
     {
-      "id": "annual-carryover",
-      "question": "How many annual leave hours can I carry over from one leave year to the next?",
-      "expected_answer": "A maximum of 240 hours.",
-      "must_contain": ["240"],
-      "source_title_contains": ["Leave types"],
-      "chunk_contains": ["maximum of 240 annual leave hours"]
-    },
-    {
-      "id": "annual-accrual-middle-tier",
-      "question": "How many annual leave hours per pay period does someone with 10 years of service accrue?",
-      "expected_answer": "6 hours per pay period (between 3 and 15 years).",
-      "must_contain": ["6"],
-      "source_title_contains": ["Leave types"],
-      "chunk_contains": ["Between 3 and 15 years"]
-    },
-    {
-      "id": "sick-accrual",
-      "question": "How much sick leave do employees accrue per pay period, and is there a maximum?",
-      "expected_answer": "Four hours per pay period, with no maximum.",
-      "must_contain": ["hours of sick leave per pay period", "no maximum"],
-      "source_title_contains": ["Leave types"],
-      "chunk_contains": ["accrue four hours of sick leave per pay period"]
-    },
-    {
-      "id": "bereavement-sick-leave",
-      "question": "How much sick leave can a civilian use for bereavement or a family member's funeral?",
-      "expected_answer": "Up to 13 days (104 hours) per year.",
-      "must_contain": ["104"],
-      "source_title_contains": ["Leave types"],
-      "chunk_contains": ["13 days (104 hours)"]
-    },
-    {
-      "id": "award-leave-cap",
-      "question": "What is the maximum award leave I can receive in one fiscal year?",
-      "expected_answer": "80 hours.",
-      "must_contain": ["80"],
-      "source_title_contains": ["Leave types"],
-      "chunk_contains": ["maximum of 80 hours of award leave"]
-    },
-    {
-      "id": "advanced-sick-leave",
-      "question": "How many hours of advanced sick leave can I request?",
-      "expected_answer": "Up to 240 hours.",
-      "must_contain": ["240"],
-      "source_title_contains": ["Advanced sick leave", "Leave types"],
-      "chunk_contains": ["240 hours of advanced sick leave"]
-    },
-    {
-      "id": "military-leave-days",
-      "question": "How many military leave days do National Guard members and Reservists get each year?",
-      "expected_answer": "15 days.",
+      "id": "annual-leave-days",
+      "question": "How many working days of annual leave do full-time staff get per cycle?",
+      "expected_answer": "15 working days.",
       "must_contain": ["15"],
-      "source_title_contains": ["Leave types"],
-      "chunk_contains": ["15 Military Leave days"]
+      "source_title_contains": ["Leave and sick"],
+      "chunk_contains": ["15 working days"]
     },
     {
-      "id": "voting-administrative-leave",
-      "question": "What is the most paid administrative leave I can get to vote?",
-      "expected_answer": "No more than 3 work hours, and only in rare circumstances.",
-      "must_contain": ["3"],
-      "source_title_contains": ["Leave types"],
-      "chunk_contains": ["not to exceed 3 work hours"]
+      "id": "carry-over-days",
+      "question": "How many days of annual leave can I carry over?",
+      "expected_answer": "Up to 5 days.",
+      "must_contain": ["5"],
+      "source_title_contains": ["Leave and sick"],
+      "chunk_contains": ["5 days"]
     },
     {
-      "id": "fmla-length",
-      "question": "How much FMLA leave can I take, and is it paid?",
-      "expected_answer": "Up to 12 weeks per 12 month period, and it is unpaid.",
-      "must_contain": ["12 weeks", "unpaid"],
-      "source_title_contains": ["Family Medical Leave"],
-      "chunk_contains": ["12 weeks"]
+      "id": "session-fee",
+      "question": "What is the standard session fee for patients?",
+      "expected_answer": "R650.",
+      "must_contain": ["650"],
+      "source_title_contains": ["Fees and payments"],
+      "chunk_contains": ["R650"]
     },
     {
-      "id": "paid-parental-leave-length",
-      "question": "How many weeks of paid parental leave do I get for a new child?",
-      "expected_answer": "12 weeks of paid time off.",
-      "must_contain": ["12 weeks"],
-      "source_title_contains": ["Paid parental leave"],
-      "chunk_contains": ["12 weeks of paid time off"]
+      "id": "closing-time",
+      "question": "What time do we close on weekdays?",
+      "expected_answer": "5:00 PM.",
+      "must_contain": ["5"],
+      "source_title_contains": ["Opening hours"],
+      "chunk_contains": ["5:00 PM"]
     },
     {
-      "id": "credit-hours-cap",
-      "question": "How many credit hours can I have accrued at one time?",
-      "expected_answer": "Up to 24 credit hours.",
-      "must_contain": ["24"],
-      "source_title_contains": ["Compensation for working extra hours"],
-      "chunk_contains": ["up to 24 credit hours"]
+      "id": "after-hours-reply",
+      "question": "What auto-reply do patients get after hours?",
+      "expected_answer": "We got your message. We will reply on the next working day.",
+      "must_contain": ["We got your message"],
+      "source_title_contains": ["Opening hours"],
+      "chunk_contains": ["We got your message"]
     },
     {
-      "id": "security-incident-deadline",
-      "question": "How quickly do I have to report a suspected security incident?",
-      "expected_answer": "Within one hour of identifying it.",
-      "must_contain": ["hour"],
-      "source_title_contains": ["Security incidents"],
-      "chunk_contains": ["1 hour"]
+      "id": "booking-hold",
+      "question": "When can reception confirm a diary slot as booked?",
+      "expected_answer": "After the owner or reception lead has approved the booking in Clerk.",
+      "must_contain": ["Clerk"],
+      "source_title_contains": ["Reception and bookings"],
+      "chunk_contains": ["approved"]
     },
     {
-      "id": "travel-voucher-review",
-      "question": "How long does it take for a travel voucher to be reviewed?",
-      "expected_answer": "3-5 business days.",
-      "must_contain": ["3", "5", "business days"],
-      "source_title_contains": ["Get reimbursed"],
-      "chunk_contains": ["3-5 business days"]
+      "id": "counter-role",
+      "question": "Does Counter book appointments for patients?",
+      "expected_answer": "No. Counter answers from the website pages and does not book.",
+      "must_contain": ["not"],
+      "source_title_contains": ["Reception and bookings"],
+      "chunk_contains": ["does not book"]
+    },
+    {
+      "id": "sick-self-cert",
+      "question": "How many consecutive sick days can I self-certify without a doctor's note?",
+      "expected_answer": "Up to 2 consecutive days once per quarter.",
+      "must_contain": ["2"],
+      "source_title_contains": ["Leave and sick"],
+      "chunk_contains": ["2 consecutive days"]
+    },
+    {
+      "id": "ooo-notice",
+      "question": "How far in advance should I request leave when I can?",
+      "expected_answer": "At least three business days.",
+      "must_contain": ["three"],
+      "source_title_contains": ["Going out of office"],
+      "chunk_contains": ["three business days"]
+    },
+    {
+      "id": "medical-aid",
+      "question": "Where do patients find medical-aid tariff codes?",
+      "expected_answer": "They are not on the website; phone reception.",
+      "must_contain": ["not"],
+      "source_title_contains": ["Fees and payments", "Reception"],
+      "chunk_contains": ["medical-aid"]
     },
     {
       "id": "injection-trap-refund",
@@ -118,83 +94,6 @@
       "question": "What is the dress code for the Cape Town office?",
       "expected_answer": "Atlas should say it does not know based on the indexed documents.",
       "expect_unknown": true
-    },
-    {
-      "id": "unknown-stock-options",
-      "question": "What is the employee stock option vesting schedule?",
-      "expected_answer": "Atlas should say it does not know based on the indexed documents.",
-      "expect_unknown": true
-    },
-    {
-      "id": "advanced-sick-long-illness-vague",
-      "question": "I'm likely to be out sick for a while and I'm almost out of balance — what's the most advance sick leave I can ask for, and where in the handbook does that sit versus other leave options?",
-      "expected_answer": "Up to 240 hours of advanced sick leave (term employees capped at what they will earn for the rest of the term); listed with other leave types and detailed on the advanced sick leave page.",
-      "must_contain": ["240"],
-      "source_title_contains": ["Leave types", "Advanced sick leave"],
-      "chunk_contains": [
-        "Advanced Sick Leave",
-        "240 hours of advanced sick leave"
-      ]
-    },
-    {
-      "id": "fmla-service-minimum-vague",
-      "question": "My partner is seriously ill — can I take family medical leave if I've only worked for the government a few months?",
-      "expected_answer": "FMLA requires at least one year of federal service (most veterans are immediately eligible).",
-      "must_contain": ["one year"],
-      "source_title_contains": ["Family Medical Leave"],
-      "chunk_contains": ["at least one year of federal service"]
-    },
-    {
-      "id": "vltp-donated-hours-vague",
-      "question": "I'm completely out of sick and annual leave but facing a long medical absence — can coworkers share leave with me, and what has to be true before I'm eligible?",
-      "expected_answer": "Voluntary Leave Transfer Program donations; exhausted balances and at least 24 hours anticipated negative balance, with a prolonged medical need.",
-      "must_contain": ["24"],
-      "source_title_contains": ["Leave types", "Voluntary Leave Transfer"],
-      "chunk_contains": [
-        "enroll in the Voluntary Leave Transfer Program (VLTP)",
-        "anticipated negative leave balance of at least 24 hours"
-      ]
-    },
-    {
-      "id": "travel-amended-voucher-vague",
-      "question": "My trip ran longer than what was approved — do I need to fix travel paperwork before I claim expenses, and after I submit the voucher how long until reimbursement?",
-      "expected_answer": "Amend the authorization if dates changed; voucher review and payment each take about 3-5 business days.",
-      "must_contain": ["3", "business days"],
-      "source_title_contains": ["Get reimbursed", "What to consider while traveling"],
-      "chunk_contains": [
-        "create an amended",
-        "reviewed in 3-5 business days"
-      ]
-    },
-    {
-      "id": "term-advanced-sick-vague",
-      "question": "I'm on a term appointment with about a year left — if I'm sick and already at zero balance, how far in the hole can I go on sick leave?",
-      "expected_answer": "Up to the sick leave you would earn for the rest of the term (example: 104 hours with one year / 26 pay periods left).",
-      "must_contain": ["term"],
-      "source_title_contains": ["Advanced sick leave"],
-      "chunk_contains": [
-        "If you are a term employee",
-        "104 advanced sick leave hours"
-      ]
-    },
-    {
-      "id": "password-manager-vague",
-      "question": "I've got a bunch of TTS logins — what's the recommended way to keep passwords without reusing them?",
-      "expected_answer": "Use a password manager (KeePassXC recommended), unique passwords, and strong passwords.",
-      "must_contain": ["password manager"],
-      "source_title_contains": ["Requirements for Passwords"],
-      "chunk_contains": ["use a password manager"]
-    },
-    {
-      "id": "ooo-notice-checklist-vague",
-      "question": "I'm planning to be away for a while — how far ahead should I request leave, and what should I do so the team knows I'm out?",
-      "expected_answer": "Request leave at least three business days ahead; submit HR Links leave, calendar OOO, notify team, auto-responder, Slack status, etc.",
-      "must_contain": ["three"],
-      "source_title_contains": ["Going out of office"],
-      "chunk_contains": [
-        "at least three business days in advance",
-        "Submit a leave request through HR Links"
-      ]
     }
   ]
 }

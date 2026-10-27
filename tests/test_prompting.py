@@ -63,14 +63,10 @@ def test_keeps_nearest_hit_when_all_exceed_cutoff() -> None:
     assert kept == [nearer]
 
 
-def test_instructions_keep_handbook_text_and_calculations_separate() -> None:
+def test_instructions_are_handbook_only_for_physio_demo() -> None:
     text = DEVELOPER_INSTRUCTIONS.casefold()
-    assert "estimate_annual_leave" in text
-    assert "get_federal_holidays" in text
-    assert "pure handbook question: do not call a tool" in text
-    assert "mixed question" in text
-    assert "combine both in one reply" in text
-    assert "ask the user for it instead of guessing" in text
+    assert "cape town physio" in text
+    assert "do not call tools" in text
     assert "must end with the number of the source" in text
     assert "with no [n] is wrong" in text
 
@@ -79,17 +75,17 @@ def test_instructions_no_longer_mention_tickets() -> None:
     assert "ticket" not in DEVELOPER_INSTRUCTIONS.casefold()
 
 
-def test_a_calculation_question_payload_still_includes_handbook_chunks() -> None:
+def test_leave_question_payload_includes_handbook_chunks() -> None:
     chunk = RetrievedChunk(
         document_id="doc-1",
-        document_title="Leave types",
+        document_title="Leave and sick leave",
         chunk_index=0,
-        text="You can carry over a maximum of 240 annual leave hours.",
+        text="Staff may carry over up to 5 days of unused annual leave into the next cycle.",
         distance=0.2,
     )
     payload = build_user_payload(
-        "I have 182 hours and 25 pay periods left. How many would I lose?",
+        "How many days of annual leave can I carry over?",
         [chunk],
     )
-    assert "maximum of 240 annual leave hours" in payload
-    assert "I have 182 hours and 25 pay periods left." in payload
+    assert "carry over up to 5 days" in payload
+    assert "How many days of annual leave can I carry over?" in payload

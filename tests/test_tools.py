@@ -27,11 +27,8 @@ def _holidays_by_name(year: int) -> dict[str, dict[str, str]]:
     return {holiday["name"]: holiday for holiday in federal_holidays(year)}
 
 
-def test_the_model_is_offered_exactly_the_two_handbook_tools() -> None:
-    assert [tool["name"] for tool in ATLAS_TOOLS] == [ESTIMATE_ANNUAL_LEAVE, GET_FEDERAL_HOLIDAYS]
-    for tool in ATLAS_TOOLS:
-        assert tool["parameters"]["additionalProperties"] is False
-        assert set(tool["parameters"]["required"]) == set(tool["parameters"]["properties"])
+def test_the_model_is_offered_no_tools_in_physio_demo() -> None:
+    assert ATLAS_TOOLS == []
 
 
 @pytest.mark.parametrize(

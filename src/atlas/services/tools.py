@@ -29,61 +29,8 @@ class ToolInputError(ValueError):
     """The model sent arguments a tool cannot use. The message goes back to it."""
 
 
-ATLAS_TOOLS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "name": ESTIMATE_ANNUAL_LEAVE,
-        "description": (
-            "Project a person's annual leave hours at the end of the leave year and "
-            "how many hours they would lose to the carry-over cap (use or lose). "
-            "Use this whenever the user gives their own numbers (current balance, "
-            "years of federal service, pay periods left) and wants a total. "
-            "Never do this arithmetic yourself. "
-            "Do not use this to explain the leave rules; those are in the handbook."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "current_hours": {
-                    "type": "number",
-                    "description": "Annual leave hours available right now.",
-                },
-                "years_of_service": {
-                    "type": "number",
-                    "description": "Years of federal service. Sets the accrual rate.",
-                },
-                "pay_periods_remaining": {
-                    "type": "integer",
-                    "description": "Pay periods left in the leave year (0 to 26).",
-                },
-            },
-            "required": ["current_hours", "years_of_service", "pay_periods_remaining"],
-            "additionalProperties": False,
-        },
-    },
-    {
-        "type": "function",
-        "name": GET_FEDERAL_HOLIDAYS,
-        "description": (
-            "List the federal holidays for one calendar year with their dates, the "
-            "weekday, and the day they are observed when they fall on a weekend. "
-            "Use this for any question about which day a holiday falls on. "
-            "Do not use this for holiday pay rules; those are in the handbook."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "year": {
-                    "type": "integer",
-                    "description": f"Calendar year, {FIRST_HOLIDAY_YEAR} to {LAST_HOLIDAY_YEAR}.",
-                }
-            },
-            "required": ["year"],
-            "additionalProperties": False,
-        },
-    },
-]
-
+# Cape Town Physio demo: handbook-only RAG (no federal leave/holiday tools).
+ATLAS_TOOLS: list[dict[str, Any]] = []
 
 def run_allowlisted_tool(name: str, arguments_json: str) -> str:
     """Execute one model-proposed tool. Unknown names are rejected."""

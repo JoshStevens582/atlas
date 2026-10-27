@@ -233,7 +233,7 @@ async def test_run_ask_streams_the_answer_and_saves_both_messages(
     first_call = openai.stream_calls[0]
     assert "<context>" in first_call["input"][-1]["content"]
     assert "The project codename is Northstar." in first_call["input"][-1]["content"]
-    assert first_call["tools"]
+    assert first_call["tools"] == []
 
 
 @pytest.mark.asyncio

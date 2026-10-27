@@ -49,8 +49,8 @@ def test_load_shipped_golden_questions() -> None:
     questions = load_golden_questions(Path("evals/questions.json"))
     assert len(questions) >= 10
     question_ids = [item.id for item in questions]
-    assert "annual-carryover" in question_ids
-    assert "security-incident-deadline" in question_ids
+    assert "carry-over-days" in question_ids
+    assert "session-fee" in question_ids
     assert "unknown-dress-code" in question_ids
     assert "injection-trap-refund" in question_ids
     indexed_titles = {
