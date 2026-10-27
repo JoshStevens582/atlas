@@ -46,10 +46,192 @@ button {
 
 .app {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr) minmax(0, 320px);
+  grid-template-rows: 1fr;
   height: 100vh;
+  height: 100dvh;
   gap: 12px;
   padding: 12px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.mobile-pane-tabs {
+  display: none;
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pane-head .section-label {
+  margin: 0;
+}
+
+.pane-collapse {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--accent-2);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (min-width: 901px) {
+  .app.app--sent-collapsed {
+    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  }
+
+  .app.app--sent-collapsed .sources {
+    display: none;
+  }
+}
+
+@media (max-width: 1280px) {
+  .app:not(.app--sent-collapsed) {
+    grid-template-columns: minmax(0, 240px) minmax(0, 1fr) minmax(0, 280px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .app:not(.app--sent-collapsed) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .app:not(.app--sent-collapsed) .sidebar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .app:not(.app--sent-collapsed) .chat {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .app:not(.app--sent-collapsed) .sources {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-height: min(36vh, 320px);
+  }
+
+  .app.app--sent-collapsed {
+    grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+    grid-template-rows: 1fr;
+  }
+
+  .app.app--sent-collapsed .sidebar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .app.app--sent-collapsed .chat {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .mobile-pane-tabs {
+    display: flex;
+    gap: 6px;
+    grid-row: 1;
+    padding: 4px;
+    border-radius: 14px;
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+  }
+
+  .mobile-pane-tabs button {
+    flex: 1;
+    min-height: 44px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .mobile-pane-tabs button.active {
+    color: var(--text);
+    border-color: var(--line);
+    background: rgba(94, 234, 212, 0.1);
+  }
+
+  .sidebar,
+  .chat,
+  .sources {
+    grid-row: 2;
+    grid-column: 1;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .app--mobile-inbox .sidebar {
+    display: flex;
+  }
+
+  .app--mobile-inbox .chat,
+  .app--mobile-inbox .sources {
+    display: none;
+  }
+
+  .app--mobile-desk .chat {
+    display: grid;
+  }
+
+  .app--mobile-desk .sidebar,
+  .app--mobile-desk .sources {
+    display: none;
+  }
+
+  .app--mobile-sent .sources {
+    display: flex;
+  }
+
+  .app--mobile-sent .sidebar,
+  .app--mobile-sent .chat {
+    display: none;
+  }
+
+  .pane-collapse {
+    display: none;
+  }
+
+  .pipeline {
+    flex-direction: column;
+  }
+
+  .step {
+    flex: none;
+  }
+
+  .chat-header h1 {
+    font-size: 18px;
+  }
+
+  .chat-header p {
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
 }
 
 .panel {
@@ -67,7 +249,9 @@ button {
   flex-direction: column;
   padding: 16px;
   gap: 16px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .brand {
@@ -124,7 +308,9 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .row {
@@ -145,6 +331,12 @@ button {
 .row.active {
   background: rgba(94, 234, 212, 0.08);
   border-color: var(--line);
+}
+
+.row span,
+.row small {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .row small {
@@ -183,6 +375,7 @@ button {
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
+  min-width: 0;
 }
 
 .chat-header {
@@ -203,6 +396,7 @@ button {
 
 .pipeline {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
@@ -236,10 +430,12 @@ button {
 }
 
 .bubble {
-  max-width: 760px;
+  max-width: min(760px, 100%);
   border-radius: 16px;
   padding: 12px 14px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .bubble.user {
@@ -313,11 +509,41 @@ textarea {
   margin-top: 4px;
 }
 
+.sidebar,
+.sources,
+.stack {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 197, 255, 0.35) transparent;
+}
+
+.sidebar::-webkit-scrollbar,
+.sources::-webkit-scrollbar,
+.stack::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.sources::-webkit-scrollbar-thumb,
+.stack::-webkit-scrollbar-thumb {
+  background: rgba(148, 197, 255, 0.28);
+  border-radius: 999px;
+}
+
+.sidebar::-webkit-scrollbar-track,
+.sources::-webkit-scrollbar-track,
+.stack::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .source-card {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px;
   background: #0a1220;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .source-card.unused {
@@ -326,6 +552,7 @@ textarea {
 
 .source-card header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   align-items: baseline;
@@ -390,6 +617,10 @@ textarea {
   font-family: "IBM Plex Mono", monospace;
   font-size: 11px;
   color: var(--accent);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: right;
+  max-width: 100%;
 }
 
 .error {
@@ -591,16 +822,3 @@ textarea {
   margin-top: 3px;
 }
 
-@media (max-width: 1100px) {
-  .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
-    height: auto;
-    min-height: 100vh;
-  }
-
-  .sources,
-  .sidebar {
-    max-height: 320px;
-  }
-}

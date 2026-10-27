@@ -173,6 +173,8 @@ export default function App() {
   const [streaming, setStreaming] = useState(false);
   const [stage, setStage] = useState<"idle" | "search" | "tool" | "generate">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [mobilePane, setMobilePane] = useState<"inbox" | "desk" | "sent">("desk");
+  const [sourcesCollapsed, setSourcesCollapsed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function refreshLists() {
@@ -286,6 +288,7 @@ export default function App() {
 
   async function openThread(id: string) {
     const detail = await fetchThread(id);
+    setMobilePane("desk");
     setThreadId(detail.id);
     setMessages(detail.messages);
     setSources([]);
@@ -923,8 +926,42 @@ export default function App() {
     );
   }
 
+  const appClass = [
+    "app",
+    sourcesCollapsed ? "app--sent-collapsed" : "",
+    `app--mobile-${mobilePane}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="app">
+    <div className={appClass}>
+      <nav className="mobile-pane-tabs" aria-label="Workspace sections">
+        <button
+          type="button"
+          className={mobilePane === "inbox" ? "active" : ""}
+          onClick={() => setMobilePane("inbox")}
+        >
+          Threads
+        </button>
+        <button
+          type="button"
+          className={mobilePane === "desk" ? "active" : ""}
+          onClick={() => setMobilePane("desk")}
+        >
+          Chat
+        </button>
+        <button
+          type="button"
+          className={mobilePane === "sent" ? "active" : ""}
+          onClick={() => setMobilePane("sent")}
+        >
+          Sources
+          {sources.length + toolCalls.length > 0
+            ? ` (${sources.length + toolCalls.length})`
+            : ""}
+        </button>
+      </nav>
       <aside className="panel sidebar">
         <div className="brand">
           <strong>ATLAS</strong>
@@ -1360,7 +1397,18 @@ export default function App() {
 
       <aside className="panel sources">
         <div>
-          <div className="section-label">Sources used</div>
+          <div className="pane-head">
+            <div className="section-label">Sources used</div>
+            <button
+              type="button"
+              className="pane-collapse"
+              aria-label={sourcesCollapsed ? "Show sources panel" : "Hide sources panel"}
+              aria-expanded={!sourcesCollapsed}
+              onClick={() => setSourcesCollapsed((open) => !open)}
+            >
+              {sourcesCollapsed ? "Show" : "Hide"}
+            </button>
+          </div>
           <p style={{ margin: 0, color: "var(--muted)", fontSize: 13 }}>
             The passages Atlas found for your question, best match first, plus
             any tool results. A [1] in the answer means that sentence came from
