@@ -254,21 +254,86 @@ button {
   min-width: 0;
 }
 
+.app--counter {
+  --product-accent: #5eead4;
+}
+
+.app--atlas {
+  --product-accent: #93c5fd;
+}
+
+.app--clerk {
+  --product-accent: #fcd34d;
+}
+
 .brand {
   display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: center;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.brand-text {
+  display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
 }
 
 .brand strong {
   letter-spacing: 0.18em;
   font-size: 13px;
-  color: var(--accent);
+  color: var(--product-accent, var(--accent));
 }
 
 .brand span {
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.35;
+}
+
+.product-audience {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--product-accent, var(--accent));
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--product-accent, var(--accent)) 35%, transparent);
+  background: color-mix(in srgb, var(--product-accent, var(--accent)) 10%, transparent);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.product-one-liner {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.suite-links-lead {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.suite-muted {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .health {

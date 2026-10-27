@@ -711,12 +711,16 @@ export default function App() {
 
   if (!signedIn) {
     return (
-      <div className="login-screen">
+      <div className="login-screen app--atlas">
         <form className="panel login-card" onSubmit={(event) => void onLogin(event)}>
           <div className="brand">
-            <strong>ATLAS</strong>
-            <span>{authHeading()}</span>
+            <img src="/brand/atlas-mark.svg" alt="" className="brand-mark" width={40} height={40} />
+            <div className="brand-text">
+              <strong>ATLAS</strong>
+              <span>{authHeading()}</span>
+            </div>
           </div>
+          <p className="product-audience">For staff · sign in required</p>
           {authMode === "login" || authMode === "signup" ? (
             <>
               <button
@@ -928,6 +932,7 @@ export default function App() {
 
   const appClass = [
     "app",
+    "app--atlas",
     sourcesCollapsed ? "app--sent-collapsed" : "",
     `app--mobile-${mobilePane}`,
   ]
@@ -964,9 +969,18 @@ export default function App() {
       </nav>
       <aside className="panel sidebar">
         <div className="brand">
-          <strong>ATLAS</strong>
-          <span>Cape Town Physio · staff handbook</span>
+          <img src="/brand/atlas-mark.svg" alt="" className="brand-mark" width={40} height={40} />
+          <div className="brand-text">
+            <strong>ATLAS</strong>
+            <span>Staff handbook & policy library with citations</span>
+          </div>
         </div>
+        <p className="product-audience">For staff · private threads</p>
+        <p className="workspace-name">Demo clinic: Cape Town Physio</p>
+        <p className="product-one-liner">
+          Not Counter (public website chat) or Clerk (patient inbox) — search and upload internal
+          docs here.
+        </p>
         <div className="health">
           <span
             className={`pill ${
@@ -990,13 +1004,16 @@ export default function App() {
           Sign out
         </button>
         <p className="suite-links">
+          <span className="suite-links-lead">Other products</span>
           <a href="https://counter.customchatandautomation.co.za" target="_blank" rel="noreferrer">
             Counter
           </a>
+          <span className="suite-muted"> visitor chat</span>
           {" · "}
           <a href="https://agent.customchatandautomation.co.za" target="_blank" rel="noreferrer">
             Clerk
           </a>
+          <span className="suite-muted"> inbox desk</span>
         </p>
         <button
           className={`new-chat ${securityOpen ? "active" : ""}`}
@@ -1327,7 +1344,10 @@ export default function App() {
           <>
         <header className="chat-header">
           <h1>{selectedTitle}</h1>
-          <p>Ask the Cape Town Physio staff handbook. Answers cite the page they came from.</p>
+          <p>
+            Atlas staff handbook demo · signed-in team asks policy questions — answers cite the
+            document passage, not your public website.
+          </p>
           <div className="pipeline">
             <div className={`step ${stage === "search" ? "active" : ""}`}>
               <b>1 · Retrieve</b>
