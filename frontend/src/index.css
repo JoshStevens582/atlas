@@ -140,12 +140,34 @@ button {
 }
 
 @media (max-width: 900px) {
-  .app {
-    grid-template-columns: 1fr;
+  .app,
+  .app:not(.app--sent-collapsed),
+  .app.app--sent-collapsed {
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
     padding: 8px;
     gap: 8px;
+    overflow: hidden;
+  }
+
+  .app .mobile-pane-tabs {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .app .sidebar,
+  .app .chat,
+  .app .sources,
+  .app:not(.app--sent-collapsed) .sidebar,
+  .app:not(.app--sent-collapsed) .chat,
+  .app:not(.app--sent-collapsed) .sources,
+  .app.app--sent-collapsed .sidebar,
+  .app.app--sent-collapsed .chat {
+    grid-column: 1;
+    grid-row: 2;
+    max-height: none;
+    min-width: 0;
   }
 
   .mobile-pane-tabs {
@@ -231,6 +253,30 @@ button {
   .chat-header p {
     font-size: 13px;
     overflow-wrap: anywhere;
+  }
+
+  .chat-header {
+    padding: 14px 14px 8px;
+  }
+
+  .app .prompts,
+  .app .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .composer .send,
+  .send {
+    min-height: 44px;
+  }
+
+  .people-row,
+  .people-actions,
+  .recovery-actions {
+    flex-wrap: wrap;
+  }
+
+  .login-card {
+    padding: 20px 16px;
   }
 }
 
