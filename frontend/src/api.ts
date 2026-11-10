@@ -459,6 +459,14 @@ export function enableUser(username: string): Promise<AdminUser> {
   }).then((response) => readJson<AdminUser>(response));
 }
 
+export function updateResetEmail(email: string): Promise<{ message: string }> {
+  return authorizedFetch("/api/auth/profile/email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  }).then((response) => readJson<{ message: string }>(response));
+}
+
 export function fetchHealth(): Promise<HealthStatus> {
   return fetch("/api/health").then((response) => readJson<HealthStatus>(response));
 }

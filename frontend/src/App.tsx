@@ -27,6 +27,7 @@ import {
   signup,
   startMfaSetup,
   streamChat,
+  updateResetEmail,
   uploadDocument,
   verifyEmail,
   waitForIngestJob,
@@ -150,6 +151,9 @@ export default function App() {
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [securityOpen, setSecurityOpen] = useState(false);
   const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [demoAccount, setDemoAccount] = useState(false);
+  const [resetEmailDraft, setResetEmailDraft] = useState("");
   const [mfaToken, setMfaToken] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [mfaPassword, setMfaPassword] = useState("");
@@ -259,6 +263,9 @@ export default function App() {
         setRole(me.role);
         setSignedInUsername(me.username);
         setMfaEnabled(me.mfa_enabled);
+        setAccountEmail(me.email);
+        setResetEmailDraft(me.email ?? "");
+        setDemoAccount(me.demo);
       })
       .catch((reason: Error) => {
         if (reason.message === "Not authenticated." || reason.message === "This account is disabled.") {
@@ -519,6 +526,9 @@ export default function App() {
     setPeopleOpen(false);
     setSecurityOpen(false);
     setMfaEnabled(false);
+    setAccountEmail(null);
+    setResetEmailDraft("");
+    setDemoAccount(false);
     setMfaSetup(null);
     setRecoveryCodes(null);
     setMfaPassword("");
@@ -577,6 +587,20 @@ export default function App() {
     setError(null);
     setPeopleOpen(false);
     setSecurityOpen(true);
+  }
+
+  async function onSaveResetEmail() {
+    setError(null);
+    setSecurityNotice(null);
+    try {
+      const result = await updateResetEmail(resetEmailDraft.trim());
+      const me = await fetchMe();
+      setAccountEmail(me.email);
+      setResetEmailDraft(me.email ?? "");
+      setSecurityNotice(result.message);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not save the reset email.");
+    }
   }
 
   async function onStartMfa() {
@@ -1181,6 +1205,36 @@ export default function App() {
             </header>
             {error ? <p className="error" style={{ padding: "0 16px" }}>{error}</p> : null}
             {securityNotice ? <p className="login-copy" style={{ padding: "0 16px" }}>{securityNotice}</p> : null}
+            {demoAccount ? null : (
+              <div className="people-list">
+                <div className="mfa-setup">
+                  <h2 className="section-label">Password reset email</h2>
+                  <p className="login-copy">
+                    Forgot password on the sign-in screen sends the reset link here.
+                  </p>
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      value={resetEmailDraft}
+                      onChange={(event) => setResetEmailDraft(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="pill"
+                    type="button"
+                    disabled={
+                      !resetEmailDraft.includes("@") ||
+                      resetEmailDraft.trim().toLowerCase() === (accountEmail ?? "")
+                    }
+                    onClick={() => void onSaveResetEmail()}
+                  >
+                    Save email
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="people-list">
               {recoveryCodes ? (
                 <div className="mfa-setup">
@@ -1342,6 +1396,14 @@ export default function App() {
           </section>
         ) : (
           <>
+        {!accountEmail && !demoAccount && signedInUsername ? (
+          <p className="error banner" style={{ margin: "12px 16px 0" }}>
+            Your account has no reset email. If you forget your password you cannot reset it.{" "}
+            <button className="pill" type="button" onClick={onOpenSecurity}>
+              Add reset email
+            </button>
+          </p>
+        ) : null}
         <header className="chat-header">
           <h1>{selectedTitle}</h1>
           <p>

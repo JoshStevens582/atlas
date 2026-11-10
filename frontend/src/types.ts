@@ -4,6 +4,8 @@ export type Me = {
   username: string;
   role: UserRole;
   mfa_enabled: boolean;
+  email: string | null;
+  demo: boolean;
 };
 
 export type AdminUser = {

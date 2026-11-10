@@ -50,6 +50,12 @@ class MeOut(BaseModel):
     username: str
     role: UserRole
     mfa_enabled: bool = False
+    email: str | None = None
+    demo: bool = False
+
+
+class UpdateEmailRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
 
 
 class AdminUserOut(BaseModel):
@@ -114,3 +120,4 @@ class AuthUser(BaseModel):
     username: str
     role: UserRole = "user"
     mfa_enabled: bool = False
+    email: str | None = None

@@ -57,6 +57,51 @@ def user_role(user: User) -> UserRole:
     return "admin" if user.role == ROLE_ADMIN else "user"
 
 
+def normalize_email(email: str) -> str:
+    normalized = email.strip().lower()
+    if not normalized or "@" not in normalized or normalized.startswith("@"):
+        raise AuthError("A valid email address is required.")
+    return normalized
+
+
+def is_demo_username(settings: Settings, username: str) -> bool:
+    for entry in settings.atlas_demo_users.split("|"):
+        name = entry.split(":", 1)[0].strip()
+        if name and name == username:
+            return True
+    return False
+
+
+async def set_reset_email(
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+    *,
+    username: str,
+    email: str,
+) -> str:
+    """Save the address Forgot password sends to.
+
+    The signed-in account holder types it, so it counts as verified; marking it
+    unverified would stop them signing in until they clicked a link.
+    """
+    if is_demo_username(settings, username):
+        raise AuthError("Shared demo accounts cannot set a reset email.")
+    normalized = normalize_email(email)
+    async with session_factory() as session:
+        repo = UserRepository(session)
+        user = await repo.get_by_username(username)
+        if user is None:
+            raise AuthError("Account not found.")
+        existing = await repo.get_by_email(normalized)
+        if existing is not None and existing.id != user.id:
+            raise AuthError("That email is already in use.")
+        if user.email != normalized:
+            user.email = normalized
+            user.email_verified_at = datetime.now(UTC)
+            await session.commit()
+    return normalized
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
 
@@ -82,9 +127,7 @@ async def signup_user(
     if len(password) < MIN_PASSWORD_LENGTH:
         raise AuthError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
 
-    normalized_email = email.strip().lower()
-    if not normalized_email or "@" not in normalized_email or normalized_email.startswith("@"):
-        raise AuthError("A valid email address is required.")
+    normalized_email = normalize_email(email)
 
     password_hash = hash_password(password)
     async with session_factory() as session:

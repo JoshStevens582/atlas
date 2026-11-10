@@ -66,6 +66,7 @@ async def require_user(
         username=user.username,
         role=user_role(user),
         mfa_enabled=user.mfa_enabled_at is not None,
+        email=user.email,
     )
 
 
