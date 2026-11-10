@@ -34,13 +34,16 @@ from atlas.schemas.auth import (
     SignupOut,
     SignupRequest,
     TokenOut,
+    UpdateEmailRequest,
     VerifyEmailRequest,
 )
 from atlas.services.admin import user_is_disabled
 from atlas.services.auth import (
     AuthError,
     authenticate_user,
+    is_demo_username,
     issue_mfa_challenge_token,
+    set_reset_email,
     signup_user,
     user_needs_email_verification,
     user_role,
@@ -238,8 +241,32 @@ async def demo_login(
 
 
 @router.get("/me", response_model=MeOut)
-async def me(user: Annotated[AuthUser, Depends(require_user)]) -> MeOut:
-    return MeOut(username=user.username, role=user.role, mfa_enabled=user.mfa_enabled)
+async def me(request: Request, user: Annotated[AuthUser, Depends(require_user)]) -> MeOut:
+    return MeOut(
+        username=user.username,
+        role=user.role,
+        mfa_enabled=user.mfa_enabled,
+        email=user.email,
+        demo=is_demo_username(request.app.state.settings, user.username),
+    )
+
+
+@router.post("/profile/email", response_model=MessageOut)
+async def update_reset_email(
+    payload: UpdateEmailRequest,
+    request: Request,
+    user: Annotated[AuthUser, Depends(require_user)],
+) -> MessageOut:
+    try:
+        await set_reset_email(
+            request.app.state.session_factory,
+            request.app.state.settings,
+            username=user.username,
+            email=payload.email,
+        )
+    except AuthError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return MessageOut(message="Reset email saved. Forgot password will send to this address.")
 
 
 @router.post("/forgot-password", response_model=MessageOut)

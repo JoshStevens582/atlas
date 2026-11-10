@@ -234,7 +234,13 @@ async def test_login_returns_role_and_me_matches(client: AsyncClient) -> None:
 
     me = await client.get("/api/auth/me", headers=_auth(alice))
     assert me.status_code == 200
-    assert me.json() == {"username": "alice", "role": "admin", "mfa_enabled": False}
+    assert me.json() == {
+        "username": "alice",
+        "role": "admin",
+        "mfa_enabled": False,
+        "email": None,
+        "demo": True,
+    }
 
 
 @pytest.mark.asyncio
